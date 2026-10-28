@@ -217,6 +217,7 @@ function renderStats(stats, t) {
     ['วัตถุที่กำลังเคลื่อนที่', fmt.format(stats.activeBodies)],
     ['เวลาคำนวณต่อขั้น', `${fmt.format(stats.physicsMs + (stats.particleMs ?? 0))} ms`],
   ];
+  if (stats.character) rows.push(['ตัวละคร', stats.character]);
   if (stats.particlesAlive !== undefined) rows.push(['อนุภาคที่มีอยู่', fmt.format(stats.particlesAlive)]);
   if (state.brokenTotal) rows.push(['ข้อต่อที่ขาด', fmt.format(state.brokenTotal)]);
   if (state.playing && stats.speed !== undefined) rows.push(['ความเร็วเทียบเวลาจริง', `${Math.round(stats.speed * 100)}%`]);

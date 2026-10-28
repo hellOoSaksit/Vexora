@@ -9,6 +9,8 @@
 #include "Schema.h"
 #include "vexora/physics/ParticleSystem.h"
 #include "vexora/physics/PhysicsWorld.h"
+#include "vexora/physics/Ragdoll.h"
+#include "vexora/physics/SecondaryMotion.h"
 
 namespace vexora::sim {
 
@@ -38,6 +40,16 @@ private:
         physics::Vec3 size; // box: half extents; sphere: x=radius; capsule: x=radius, y=half height
         uint32_t color;
         bool dynamic;
+        int virtualIndex = -1;  // >= 0: not a physics body; transform comes from virtualXf_.
+    };
+
+    // A character in the ragdoll scene and its drive state.
+    struct Actor {
+        std::unique_ptr<physics::Ragdoll> ragdoll;
+        physics::Transform root;
+        std::string state;          // "animated" | "ragdoll" | "powered" | "gettingup"
+        double blendTime = 0.0;
+        physics::LocalPose blendFrom;
     };
 
     physics::BodyHandle addBody(const physics::BodyDesc& desc, const std::string& shape, physics::Vec3 size, uint32_t color);
@@ -46,6 +58,14 @@ private:
     void buildChain(const json& p);
     bool buildFountain(const json& p, const json& g, std::string& error);
     void addFloor();
+    int addVirtual(const std::string& shape, physics::Vec3 size, uint32_t color);
+    physics::Transform transformOf(const RenderBody& b) const;
+    bool buildRagdoll(const json& p, std::string& error);
+    void buildTail(const json& p);
+    physics::LocalPose idlePose(double t) const;
+    void preStep(double dt);
+    void postStep(double dt);
+    const char* characterState() const;
 
     std::unique_ptr<physics::PhysicsWorld> world_;
     std::unique_ptr<physics::ParticleSystem> particles_;
@@ -56,6 +76,16 @@ private:
     double simTime_ = 0.0;
     uint32_t displayLimit_ = 20000;
     std::vector<physics::BodyHandle> chainLinks_;
+    std::vector<physics::Transform> virtualXf_;
+
+    // Ragdoll scene.
+    physics::DemoHumanoid human_;
+    std::vector<Actor> actors_;
+    // Spring tail scene.
+    physics::Skeleton tailSkeleton_;
+    std::unique_ptr<physics::SecondaryMotion> spring_;
+    physics::Transform tailRoot_;
+    int bodyVirtual_ = -1, firstSegmentVirtual_ = -1;
 
     // Per-frame accumulators (reset by frame()).
     double physicsMs_ = 0.0, particleMs_ = 0.0;

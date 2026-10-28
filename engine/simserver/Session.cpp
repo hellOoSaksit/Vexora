@@ -74,6 +74,9 @@ void Session::addFloor() {
 }
 
 bool Session::load(const std::string& sceneId, const json& params, const json& global, std::string& error) {
+    actors_.clear();  // Ragdolls reference the world: destroy them first.
+    spring_.reset();
+    virtualXf_.clear();
     world_.reset();
     particles_.reset();
     bodies_.clear();
@@ -97,7 +100,15 @@ bool Session::load(const std::string& sceneId, const json& params, const json& g
     if (sceneId == "drop") buildDrop(params, global);
     else if (sceneId == "tower") buildTower(params);
     else if (sceneId == "chain") buildChain(params);
-    else if (sceneId == "fountain") {
+    else if (sceneId == "tail") buildTail(params);
+    else if (sceneId == "ragdoll") {
+        if (!buildRagdoll(params, error)) {
+            actors_.clear();
+            world_.reset();
+            bodies_.clear();
+            return false;
+        }
+    } else if (sceneId == "fountain") {
         if (!buildFountain(params, global, error)) {
             world_.reset();
             bodies_.clear();
@@ -242,7 +253,9 @@ double Session::fixedDt() const { return world_ ? world_->fixedDt() : 1.0 / 60.0
 
 bool Session::step(std::string& error) {
     if (!world_) return true;
+    preStep(world_->fixedDt());
     world_->step();
+    postStep(world_->fixedDt());
     physicsMs_ += world_->lastStepStats().stepMilliseconds;
     for (const SolverWarning& w : world_->warnings()) warnings_.push_back(w);
     brokenSinceFrame_ += world_->brokenConstraints().size();
@@ -286,6 +299,38 @@ bool Session::action(const std::string& id, std::string& error) {
         world_->addImpulse(tip, {0.0f, 4.0f * m, 6.0f * m});
         return true;
     }
+    if (sceneId_ == "ragdoll" && (id == "push" || id == "powered" || id == "getup")) {
+        for (Actor& a : actors_) {
+            if (id == "push") {
+                a.ragdoll->setDrive(BoneDrive::Simulated);
+                a.state = "ragdoll";
+                const int chest = a.ragdoll->partForBone(human_.skeleton.find("chest"));
+                const float strength = float(params_["pushStrength"].get<double>());
+                world_->addImpulse(a.ragdoll->body(size_t(chest)), a.root.rotation.rotate({0.0f, 0.15f * strength, -strength}));
+            } else if (id == "powered") {
+                a.ragdoll->setDrive(BoneDrive::Powered);
+                a.state = "powered";
+            } else if (a.state != "animated") {  // getup
+                // Stand up where the pelvis landed, keeping the character's heading.
+                const BodyHandle pelvis = a.ragdoll->body(0);
+                const Vec3 p = world_->getTransform(pelvis).position;
+                const ModelPose idle = toModel(human_.skeleton, idlePose(simTime_));
+                const Vec3 forward = a.root.rotation.rotate({0, 0, 1});  // Heading only: stand upright.
+                a.root = {{p.x, 0.0f, p.z}, Quat::fromAxisAngle({0, 1, 0}, std::atan2(forward.x, forward.z))};
+                const ModelPose fallen = a.ragdoll->physicsPose(idle, a.root);
+                a.blendFrom = toLocal(human_.skeleton, fallen);
+                a.blendTime = 0.0;
+                a.ragdoll->setDrive(BoneDrive::Animated);
+                a.state = "gettingup";
+            }
+        }
+        return true;
+    }
+    if (sceneId_ == "tail" && id == "reset") {
+        spring_->reset(toModel(tailSkeleton_, restPose(tailSkeleton_)), tailRoot_);
+        postStep(0.0);
+        return true;
+    }
     error = "ฉากนี้ไม่มีคำสั่ง '" + id + "'";
     return false;
 }
@@ -303,8 +348,7 @@ json Session::describeScene() const {
     json list = json::array();
     size_t dynamicIndex = 0;
     for (const RenderBody& b : bodies_)
-        list.push_back(bodyJson(b.dynamic ? json(dynamicIndex++) : json(-1), b.shape, b.size, b.color, b.dynamic,
-                                world_->getTransform(b.handle)));
+        list.push_back(bodyJson(b.dynamic ? json(dynamicIndex++) : json(-1), b.shape, b.size, b.color, b.dynamic, transformOf(b)));
     return {{"scene", sceneId_},
             {"bodies", list},
             {"fixedDt", fixedDt()},
@@ -318,8 +362,7 @@ json Session::takeAddedBodies() {
     for (size_t i = 0; i < bodies_.size(); ++i) {
         const RenderBody& b = bodies_[i];
         if (i >= reportedBodies_)
-            list.push_back(bodyJson(b.dynamic ? json(dynamicIndex) : json(-1), b.shape, b.size, b.color, b.dynamic,
-                                    world_->getTransform(b.handle)));
+            list.push_back(bodyJson(b.dynamic ? json(dynamicIndex) : json(-1), b.shape, b.size, b.color, b.dynamic, transformOf(b)));
         if (b.dynamic) ++dynamicIndex;
     }
     reportedBodies_ = bodies_.size();
@@ -335,9 +378,9 @@ json Session::frame(bool includeParticles) {
     std::vector<uint8_t> sleep;
     for (const RenderBody& b : bodies_) {
         if (!b.dynamic) continue;
-        const Transform t = world_->getTransform(b.handle);
+        const Transform t = transformOf(b);
         xf.insert(xf.end(), {t.position.x, t.position.y, t.position.z, t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w});
-        sleep.push_back(world_->isSleeping(b.handle) ? 1 : 0);
+        sleep.push_back(b.virtualIndex < 0 && world_->isSleeping(b.handle) ? 1 : 0);
     }
     f["bodies"] = base64(xf.data(), xf.size() * sizeof(float));
     f["sleep"] = base64(sleep.data(), sleep.size());
@@ -348,6 +391,8 @@ json Session::frame(bool includeParticles) {
                   {"bodies", world_->bodyCount()},
                   {"fixedDt", world_->fixedDt()},
                   {"broken", brokenSinceFrame_}};
+    if (const char* state = characterState()) stats["character"] = state;
+    if (spring_) stats["springRecoveries"] = spring_->recoveries();
 
     if (particles_) {
         stats["particleMs"] = stepsSinceFrame_ ? particleMs_ / stepsSinceFrame_ : 0.0;

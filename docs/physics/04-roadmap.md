@@ -27,7 +27,7 @@
 | Acceptance | Scene 1–3 ผ่านบนทั้ง 3 OS; เกณฑ์ performance ของ Scene 13; การ decomposition ของ mesh ทดสอบ 5 ชิ้นได้ hull ≤ N ชิ้นและ volume error ≤ 10%; ไม่มี leak ใน ASan |
 | DoD | ข้างต้น + Physics Properties / Rigid Body Inspector / Collision Visualization ใช้ API ที่มีอยู่โดยไม่ถือ state |
 
-## Phase C — Character Physics
+## Phase C — Character Physics — ส่วนแรกเสร็จ: Ragdoll, blending, secondary motion (ยังไม่มี Character controller และการเชื่อมกับระบบ Animation จริง)
 
 | | |
 |---|---|

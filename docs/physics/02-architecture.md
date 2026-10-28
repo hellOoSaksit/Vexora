@@ -53,21 +53,21 @@ API บังคับกฎนี้: เรียก `setKinematicTarget` ก�
 frame(dt_frame):
   n = clock.advance(dt_frame)                       ✅ FixedStepClock (จำกัด maxStepsPerFrame, รายงาน droppedTime)
   repeat n:
-     1. Animation evaluate → Animation Pose (local)        🟡 Phase C
+     1. Animation evaluate → Animation Pose (local)        🟡 ยังไม่มีระบบ Animation (ใช้ animation แบบ procedural ใน demo)
      2. เขียน kinematic targets (bones/objects ที่ animation เป็นเจ้าของ)   ✅ API
      3. physics.step()                                      ✅
           - เก็บ previous transforms (สำหรับ interpolation)
           - Jolt Update(fixedDt, collisionSteps)
           - รวบรวม contact events (เรียงลำดับแบบ deterministic)
           - ตรวจ breakable constraints, ตรวจ NaN/ความเร็วผิดปกติ
-     4. อ่าน Physics Pose ของ bone ที่ physics เป็นเจ้าของ               🟡 Phase C
-     5. Blend(Animation Pose, Physics Pose, weights) → Final Pose     🟡 Phase C
+     4. อ่าน Physics Pose ของ bone ที่ physics เป็นเจ้าของ               ✅ Ragdoll::physicsPose / SecondaryMotion::apply
+     5. Blend(Animation Pose, Physics Pose, weights) → Final Pose     ✅ blendPoses
   render: alpha = clock.interpolationAlpha(); ใช้ getInterpolatedTransform(h, alpha)   ✅
 ```
 
 ผลลัพธ์ไม่ขึ้นกับ frame rate ของการแสดงผล เพราะ physics เดินด้วย fixed step เท่านั้น (test: 30/60/144 FPS → จำนวน step เท่ากัน) ✅
 
-## 3. Character Physics — Animation Pose vs Physics Pose 🟡 (Phase C)
+## 3. Character Physics — Animation Pose vs Physics Pose ✅ (`Ragdoll.h`, `Skeleton.h`)
 
 ออกแบบไว้ล่วงหน้าเพื่อไม่ให้ขัดกับสถาปัตยกรรมปัจจุบัน:
 
@@ -83,7 +83,7 @@ frame(dt_frame):
 - **เมื่อสองระบบพยายามควบคุม bone เดียวกัน**: แต่ละ bone มีโหมดเดียวต่อ step (single-writer rule ข้อ 2.1) การผสมเกิดที่ขั้น Blend เท่านั้น ไม่ใช่การเขียน transform ทับกัน
 - **Jitter**: ใช้ collision group ของ ragdoll (ปิดการชนระหว่าง bone ที่ติดกัน), joint limits แบบ SwingTwist, เพิ่ม solver iterations เฉพาะ ragdoll และ sleeping threshold
 
-## 4. Secondary Motion (Spring Physics) 🟡 (Phase C)
+## 4. Secondary Motion (Spring Physics) ✅ (`SecondaryMotion.h`)
 
 ระบบแยกที่นำกลับมาใช้ซ้ำได้ ทำงานบน bone chain ใน pose space **ไม่ใช้ Jolt** (ต้นทุนต่ำ ควบคุมได้ และไม่ต้องสร้าง rigid body ต่อ bone)
 - Verlet/XPBD per bone: stiffness (ดึงกลับสู่ animation pose), damping, inertia จากการเคลื่อนที่ของ root, gravity, angular limits, collision แบบ sphere/capsule

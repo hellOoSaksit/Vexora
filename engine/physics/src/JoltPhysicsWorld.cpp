@@ -9,6 +9,7 @@
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
+#include <Jolt/Physics/Collision/GroupFilterTable.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
@@ -20,6 +21,7 @@
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/PointConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
+#include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/StateRecorderImpl.h>
@@ -195,6 +197,11 @@ struct PhysicsWorld::Impl {
     std::vector<uint32_t> freeBodySlots;
     std::vector<ConstraintRecord> constraints;
     std::vector<uint32_t> freeConstraintSlots;
+    struct Group {
+        JPH::Ref<JPH::GroupFilterTable> table;
+        uint32_t subGroups;
+    };
+    std::vector<Group> groups;  // Index = group id - 1.
 
     uint64_t stepIndex = 0;
     uint64_t structureVersion = 0;
@@ -373,6 +380,12 @@ void PhysicsWorld::Impl::checkBreakables() {
             case ConstraintType::Distance:
                 linear = std::abs(static_cast<JPH::DistanceConstraint*>(r.constraint.GetPtr())->GetTotalLambdaPosition());
                 break;
+            case ConstraintType::SwingTwist: {
+                auto* c = static_cast<JPH::SwingTwistConstraint*>(r.constraint.GetPtr());
+                linear = c->GetTotalLambdaPosition().Length();
+                angular = std::abs(c->GetTotalLambdaTwist()) + std::abs(c->GetTotalLambdaSwingY()) + std::abs(c->GetTotalLambdaSwingZ());
+                break;
+            }
         }
         const float force = linear / subDt, torque = angular / subDt;
         if ((r.breakForce > 0.0f && force > r.breakForce) || (r.breakTorque > 0.0f && torque > r.breakTorque)) {
@@ -492,6 +505,11 @@ Result<BodyHandle> PhysicsWorld::createBody(const BodyDesc& desc) {
     bcs.mMotionQuality = (desc.continuousCollision || m.quality.forceContinuousCollision)
                              ? JPH::EMotionQuality::LinearCast
                              : JPH::EMotionQuality::Discrete;
+    if (desc.collisionGroup != 0) {
+        if (desc.collisionGroup > m.groups.size() || desc.subGroup >= m.groups[desc.collisionGroup - 1].subGroups)
+            return R::failure(ErrorCode::InvalidArgument, "Unknown collision group or sub-group");
+        bcs.mCollisionGroup = JPH::CollisionGroup(m.groups[desc.collisionGroup - 1].table, desc.collisionGroup, desc.subGroup);
+    }
     if (desc.massOverride > 0.0f && desc.motion == MotionType::Dynamic) {
         bcs.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
         bcs.mMassPropertiesOverride.mMass = desc.massOverride;
@@ -582,6 +600,17 @@ float PhysicsWorld::getMass(BodyHandle h) const {
     if (!lock.Succeeded()) return 0.0f;
     const float invMass = lock.GetBody().GetMotionProperties()->GetInverseMass();
     return invMass > 0.0f ? 1.0f / invMass : 0.0f;
+}
+
+bool PhysicsWorld::getBounds(BodyHandle h, Vec3& outMin, Vec3& outMax) const {
+    const BodyRecord* r = impl_->find(h);
+    if (!r) return false;
+    JPH::BodyLockRead lock(impl_->system.GetBodyLockInterfaceNoLock(), r->id);
+    if (!lock.Succeeded()) return false;
+    const JPH::AABox box = lock.GetBody().GetWorldSpaceBounds();
+    outMin = fromJ(box.mMin);
+    outMax = fromJ(box.mMax);
+    return true;
 }
 
 bool PhysicsWorld::isSleeping(BodyHandle h) const {
@@ -682,7 +711,7 @@ Result<ConstraintHandle> PhysicsWorld::createConstraint(const ConstraintDesc& d)
         return R::failure(ErrorCode::InvalidArgument, "Constraint limitMin must be <= limitMax");
 
     JPH::Vec3 axis = toJ(d.axis), normal = toJ(d.normal);
-    if (d.type == ConstraintType::Hinge || d.type == ConstraintType::Slider) {
+    if (d.type == ConstraintType::Hinge || d.type == ConstraintType::Slider || d.type == ConstraintType::SwingTwist) {
         if (axis.Length() < 1e-6f || normal.Length() < 1e-6f || std::abs(axis.Normalized().Dot(normal.Normalized())) > 1e-3f)
             return R::failure(ErrorCode::InvalidArgument, "Constraint axis and normal must be non-zero and perpendicular");
         axis = axis.Normalized();
@@ -691,6 +720,11 @@ Result<ConstraintHandle> PhysicsWorld::createConstraint(const ConstraintDesc& d)
     if (d.type == ConstraintType::Hinge && d.hasLimits && (d.limitMin < -JPH::JPH_PI || d.limitMin > 0.0f ||
                                                            d.limitMax < 0.0f || d.limitMax > JPH::JPH_PI))
         return R::failure(ErrorCode::InvalidArgument, "Hinge limits must satisfy -pi <= min <= 0 <= max <= pi");
+
+    if (d.type == ConstraintType::SwingTwist &&
+        !(d.swingLimit >= 0.0f && d.swingLimit <= JPH::JPH_PI && d.twistMin >= -JPH::JPH_PI && d.twistMax <= JPH::JPH_PI &&
+          d.twistMin <= d.twistMax && d.motorFrequency >= 0.0f && d.motorDamping >= 0.0f))
+        return R::failure(ErrorCode::InvalidArgument, "SwingTwist needs 0 <= swing <= pi and -pi <= twistMin <= twistMax <= pi");
 
     JPH::Ref<JPH::TwoBodyConstraintSettings> settings;
     const JPH::RVec3 p = toJR(d.anchor);
@@ -730,6 +764,20 @@ Result<ConstraintHandle> PhysicsWorld::createConstraint(const ConstraintDesc& d)
                 s->mLimitsMax = d.limitMax;
             }
             s->mMotorSettings.SetForceLimit(d.motorMaxForce);
+            settings = s;
+            break;
+        }
+        case ConstraintType::SwingTwist: {
+            auto* s = new JPH::SwingTwistConstraintSettings();
+            s->mPosition1 = s->mPosition2 = p;
+            s->mTwistAxis1 = s->mTwistAxis2 = axis;
+            s->mPlaneAxis1 = s->mPlaneAxis2 = normal;
+            s->mNormalHalfConeAngle = s->mPlaneHalfConeAngle = d.swingLimit;
+            s->mTwistMinAngle = d.twistMin;
+            s->mTwistMaxAngle = d.twistMax;
+            s->mSwingMotorSettings = s->mTwistMotorSettings = JPH::MotorSettings(d.motorFrequency, d.motorDamping);
+            s->mSwingMotorSettings.SetTorqueLimit(d.motorMaxForce);
+            s->mTwistMotorSettings.SetTorqueLimit(d.motorMaxForce);
             settings = s;
             break;
         }
@@ -810,6 +858,52 @@ float PhysicsWorld::getConstraintPosition(ConstraintHandle h) const {
     if (r->type == ConstraintType::Slider)
         return static_cast<const JPH::SliderConstraint*>(r->constraint.GetPtr())->GetCurrentPosition();
     return 0.0f;
+}
+
+Status PhysicsWorld::setSwingTwistTarget(ConstraintHandle h, bool enabled, const Quat& relative) {
+    const ConstraintRecord* r = impl_->find(h);
+    if (!r) return {ErrorCode::InvalidHandle, "Unknown or destroyed constraint"};
+    if (r->type != ConstraintType::SwingTwist) return {ErrorCode::InvalidArgument, "Constraint is not SwingTwist"};
+    if (!relative.isFinite()) return badValue();
+    auto* c = static_cast<JPH::SwingTwistConstraint*>(r->constraint.GetPtr());
+    const JPH::EMotorState state = enabled ? JPH::EMotorState::Position : JPH::EMotorState::Off;
+    c->SetSwingMotorState(state);
+    c->SetTwistMotorState(state);
+    if (enabled) c->SetTargetOrientationBS(toJ(relative));
+    return {};
+}
+
+Status PhysicsWorld::setMotionType(BodyHandle h, MotionType motion) {
+    BodyRecord* r = impl_->find(h);
+    if (!r) return badHandle();
+    if (r->motion == MotionType::Static || motion == MotionType::Static)
+        return {ErrorCode::InvalidArgument, "Only Kinematic <-> Dynamic switching is supported"};
+    if (r->motion == motion) return {};
+    impl_->bi().SetMotionType(r->id, motion == MotionType::Dynamic ? JPH::EMotionType::Dynamic : JPH::EMotionType::Kinematic,
+                              JPH::EActivation::Activate);
+    r->motion = motion;
+    return {};
+}
+
+MotionType PhysicsWorld::motionType(BodyHandle h) const {
+    const BodyRecord* r = impl_->find(h);
+    return r ? r->motion : MotionType::Static;
+}
+
+uint32_t PhysicsWorld::createCollisionGroup(uint32_t subGroups) {
+    const uint32_t n = std::max(1u, subGroups);
+    impl_->groups.push_back({new JPH::GroupFilterTable(n), n});
+    return uint32_t(impl_->groups.size());
+}
+
+Status PhysicsWorld::setSubGroupCollision(uint32_t group, uint32_t a, uint32_t b, bool collide) {
+    if (group == 0 || group > impl_->groups.size()) return {ErrorCode::InvalidArgument, "Unknown collision group"};
+    const auto& g = impl_->groups[group - 1];
+    JPH::GroupFilterTable& t = *g.table;
+    if (a >= g.subGroups || b >= g.subGroups || a == b) return {ErrorCode::InvalidArgument, "Bad sub-group pair"};
+    if (collide) t.EnableCollision(a, b);
+    else t.DisableCollision(a, b);
+    return {};
 }
 
 // ---------------------------------------------------------------------------------------

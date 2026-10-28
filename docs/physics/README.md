@@ -25,8 +25,8 @@
 | Snapshot/restore, determinism (binary เดียวกัน) | Jolt + Vexora | ✅ ทดสอบแล้ว |
 | Determinism ข้ามแพลตฟอร์ม | — | ⛔ ไม่รับประกัน (ยังไม่ได้ตรวจ) |
 | Debug draw data, solver warnings, step stats | Vexora | ✅ ทดสอบแล้ว (ยังไม่มี UI) |
-| Ragdoll, animation/physics blending | Jolt (ragdoll) + Vexora (blend) | 🟡 ออกแบบแล้ว ยังไม่มีโค้ด |
-| Spring secondary motion | Vexora (Preview/การประมาณ) | 🟡 ออกแบบแล้ว ยังไม่มีโค้ด |
+| Ragdoll (Animated / Simulated / Powered), animation ↔ physics blending, ลุกขึ้น | Jolt (bodies, SwingTwist joints) + Vexora (pose mapping, โหมด, blend) | ✅ ทดสอบแล้ว (ตัวละครตัวอย่าง; ยังไม่มีระบบ Skeleton/Animation จริงของ Vexora) |
+| Spring secondary motion (bone chains: ผม หาง สายรัด) | Vexora (Preview/การประมาณ) | ✅ ทดสอบแล้ว |
 | Cloth / Hair / Soft body | ยังไม่ได้เลือก solver | 🟡 ยังไม่มีโค้ด |
 | Particles: emitter, lifetime, gravity, wind/drag, ชน plane + sphere | Vexora — CPU (multi-thread) หรือ GPU (Vulkan compute) | ✅ ทดสอบแล้ว (GPU ทดสอบบน software Vulkan เท่านั้น ยังไม่ได้วัดบน GPU จริง) |
 | Particles: trails, sub-emitters, force fields, ชนกับ mesh/ตัวละคร | Vexora | 🟡 ยังไม่มีโค้ด |

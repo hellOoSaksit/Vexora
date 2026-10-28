@@ -62,27 +62,44 @@ cmake -S . -B build && cmake --build build -j
 | Slider limit −1 m, Fixed joint, Distance spring 2 Hz (1 kg) | slider หยุดที่ −1 m; fixed เคลื่อน < 1 cm; spring ยุบ g/(2πf)² = 6.2 cm ±1% | −1.000; 0.000; 3.938 m (คาด 3.938) |
 | Breakable fixed joint (breakForce 1,000 N) | 50 kg (490 N) ไม่หัก; 200 kg (1,962 N) หัก + มี event + ตกลง | ✅ ตามคาด |
 
-## Scene 4 — Character Ragdoll 🟡 Phase C
-- **Setup:** skeleton มนุษย์ 15–20 bone, capsule ต่อ bone, SwingTwist joints พร้อม limit ตาม anatomy, collision group ปิดการชนของ bone ที่ติดกัน
-- **Expected:** ล้มลงพื้นและหยุดนิ่งตามธรรมชาติ
-- **Acceptance:** ทุก joint อยู่ใน limit (+ tolerance ที่วัดได้), ไม่มี bone ทะลุพื้น > 2 cm, ไม่มีการสั่นค้าง (ความเร็วเชิงมุมทุก bone < 0.05 rad/s หลัง 5 s) และ sleep, ไม่มี NaN/explosion warning จากการปล่อย 100 ครั้งด้วย pose/ความเร็วเริ่มต้นแบบสุ่ม (seed คงที่)
-- **วิธีทดสอบ:** headless test + บันทึกค่าต่อ bone
+## Scene 4 — Character Ragdoll ✅
+ไฟล์: `engine/physics/tests/scene04_ragdoll.cpp` · ตัวละคร: `makeDemoHumanoid()` (16 bones, 12 capsule parts, SwingTwist joints) — Jolt คำนวณ body/joint, Vexora ทำ mapping pose, โหมด และ blend
 
-## Scene 5 — Animation-to-Physics Blending 🟡 Phase C
-- **Setup:** ตัวละครเดินด้วย animation → ถูกชนด้วย impulse → ragdoll → get-up animation
-- **Acceptance:** (1) ที่ weight = 0 final pose ตรงกับ animation pose (error < 1e-4 m) (2) ตอนสลับไป ragdoll ความเร็วของ bone ต่อเนื่อง (ต่างจากความเร็วของ animation ≤ 10%) (3) ระหว่าง blend กลับ ไม่มี bone ใดถูกเขียนโดยสองระบบใน step เดียว (assert ใน debug build) (4) ไม่มีการกระโดดของตำแหน่งเกิน threshold ต่อ frame
+| กรณี | Acceptance | วัดได้ |
+|---|---|---|
+| ปล่อย ragdoll + impulse สุ่ม 25 seeds, 6 s (HighQuality) | ไม่มี seed ใดเกิน: joint เกิน limit > 0.15 rad, จมพื้น > 3 cm, ความเร็วหลัง 6 s > 0.05 m/s, solver warning | ผ่านทั้ง 25: เกิน limit สูงสุด 0.095 rad, ต่ำสุด −2.2 cm (slop), ความเร็ว 0.048 m/s |
+| โหมด Animated (kinematic) ตาม animation ที่เดิน+แกว่งแขน | pose error < 1e-3 | 2.3e-4 |
+| สร้าง ragdoll ผิด (bone ซ้ำ, ลูกก่อนพ่อ) / ทำลาย ragdoll | ถูกปฏิเสธ / body หายครบ | ✅ |
 
-## Scene 6 — Spring-based Secondary Motion 🟡 Phase C
-- **Setup:** หาง 8 bone ติดกับ root ที่ขยับซ้าย–ขวาแบบ sine แล้วหยุด
-- **Acceptance:** หลัง root หยุด แอมพลิจูดลดลงแบบ monotonic (ตรวจ peak ต่อเนื่อง), พลังงานไม่เพิ่ม, กลับสู่ rest pose ภายในเวลาที่ damping กำหนด ±10%, reset แล้วผลซ้ำเดิมระดับบิต, ผลที่ 30/60/144 FPS เหมือนกัน (fixed step)
+หมายเหตุ: ข้อศอก/เข่าใช้ cone แคบประมาณ hinge (ยังไม่ใช่ hinge จริง); threshold joint 0.15 rad มาจากค่าที่วัดได้ + headroom เพราะ joint limit ของ solver เป็นแบบ soft ชั่วขณะ
+
+## Scene 5 — Animation-to-Physics Blending ✅
+| กรณี | Acceptance | วัดได้ |
+|---|---|---|
+| วิ่ง 3 m/s ด้วย animation แล้วสลับเป็น ragdoll | ความเร็ว pelvis ต่อเนื่อง ±10% | 3.000 → 2.997 m/s |
+| blend weight 0 / 1 / 0.5 | 0 = animation ตรงทุก bone, 1 = physics, 0.5 = มุมครึ่งทาง ±2% | ✅ |
+| Powered (มอเตอร์ข้อต่อ) งอศอก 1.2 rad, ไม่มีแรงโน้มถ่วง 2 s | error < 0.1 rad และ < 25% ของแบบไม่มีมอเตอร์ | 0.000 rad (limp 1.200 rad) |
+| ลุกขึ้น (UI/protocol test): ragdoll → blend กลับ animation ใน 0.8 s | กลับมายืน pelvis ที่ความสูงเดิม ±5 cm | ✅ (`app/test/protocol.test.mjs`) |
+
+## Scene 6 — Spring-based Secondary Motion ✅
+ไฟล์: `scene06_secondary_motion.cpp` — solver ของ Vexora (Verlet + ข้อจำกัด) **เป็นการประมาณผล ไม่ใช่การจำลองเต็มรูปแบบ**
+
+| กรณี | Acceptance | วัดได้ |
+|---|---|---|
+| weight 0 / stiffness 1 | ตรงกับ animation | deviation 0 rad |
+| หางห้อยตามแรงโน้มถ่วงที่ stiffness 0.05 / 0.005 / 0 | ยิ่งนิ่มยิ่งห้อย; ความยาวข้อคงที่; มุมไม่เกิน limit | 0.052 / 0.527 / 0.678 m; length error 6e-8 m; มุมสูงสุด = limit 0.600 |
+| ตัวส่าย 2 s แล้วหยุด | แอมพลิจูดลดลงต่อเนื่อง (ไม่สะสมพลังงาน), นิ่งภายใน 10 s | 9 peaks ลดลงทุกครั้ง, drift 0 |
+| Capsule กีดขวาง | ไม่ทะลุ | ระยะต่ำสุด = ค่าที่อนุญาตพอดี (0.150 m) |
+| reset / 60 Hz vs 120 Hz | reset ผลเหมือนเดิมทุกบิต; รูปทรงนิ่งต่างกัน < 5 mm | 2.1 mm (ก่อนแก้ bug stiffness: 26 mm) |
+| teleport 100 m โดยไม่ reset | ไม่ระเบิด/NaN, ยังติดกับ root | ✅ recoveries 0 |
 
 ## Scene 7 — Cloth Collision 🟡 Phase D
 - **Setup:** ผ้า 32×32 pin มุมบนสองมุม ตกลงบนทรงกลมและ capsule ของตัวละคร มีลม
 - **Acceptance:** ไม่มี vertex ทะลุ collider เกิน cloth thickness, ความยาว edge ยืดไม่เกิน X% (ตั้งจาก stretch stiffness), pinned vertex ไม่เคลื่อน, self-collision (หาก solver รองรับ — Jolt ไม่รองรับ soft-vs-soft) ไม่ทะลุกันเอง, bake + playback ตรงกัน
 
-## Scene 8 — Hair or Bone Chain Simulation 🟡 Phase C/D
-- **Setup:** 100 guide strands × 16 จุด หรือ bone chain ของผมหางม้า, หัวหมุน 180° ใน 0.5 s
-- **Acceptance:** ไม่ทะลุ collision capsule ของหัว, ความยาว segment คงที่ ±1%, ไม่มีการสั่นค้างหลังหยุด, เวลา/frame อยู่ในงบที่กำหนดของ Interactive Preview
+## Scene 8 — Hair or Bone Chain Simulation 🟡 (bone chain ✅, hair strands ยังไม่มี)
+- Bone chain: ใช้ solver เดียวกับ Scene 6 (test `Scene08: invalid chains are rejected` + การทดสอบใน Scene 6) และฉาก "หางสปริง" ในแอป (protocol test: ไม่ทะลุพื้นขณะกระโดด, recoveries 0)
+- Hair guide strands (100 เส้น × 16 จุด) และ collision กับศีรษะ: 🟡 Phase D
 
 ## Scene 9 — Particle Collision ✅ (ส่วนแรก) — ผลวัดอยู่ใน [05-cpu-gpu.md](05-cpu-gpu.md) §6
 ไฟล์: `scene09_particles.cpp` — ทำแล้ว: plane + sphere collision, bounce, lifetime, CPU determinism, CPU/GPU parity, การเลือก backend

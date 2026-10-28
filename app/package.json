@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node scripts/copy-sim.js && electron .",
     "copy-sim": "node scripts/copy-sim.js",
-    "test": "node scripts/copy-sim.js && node --test \"test/*.test.mjs\"",
+    "test": "node scripts/copy-sim.js && node --test --test-timeout=60000 \"test/*.test.mjs\"",
     "dist": "node scripts/copy-sim.js && electron-builder --publish never",
     "dist:win": "node scripts/copy-sim.js && electron-builder --win --publish never"
   },

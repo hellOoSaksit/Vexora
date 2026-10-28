@@ -46,6 +46,10 @@ struct BodyDesc {
     bool allowSleeping = true;
     bool isTrigger = false;            // Sensor: reports contacts, no collision response.
     uint8_t layer = 0;                 // Collision layer [0, kMaxCollisionLayers).
+    // Collision group (from createCollisionGroup) and sub-group within it; 0 = no group.
+    // Used e.g. to stop neighbouring ragdoll bones colliding while other pairs still do.
+    uint32_t collisionGroup = 0;
+    uint32_t subGroup = 0;
     uint64_t userData = 0;
 };
 
@@ -61,7 +65,7 @@ struct WorldSettings {
     float explosionSpeedWarning = 200.0f;
 };
 
-enum class ConstraintType { Fixed, Point, Hinge, Slider, Distance };
+enum class ConstraintType { Fixed, Point, Hinge, Slider, Distance, SwingTwist };
 
 // Anchors and axes are given in world space at creation time.
 // bodyA is the attached (child) body, bodyB its parent; bodyB may be invalid to attach bodyA to
@@ -72,7 +76,7 @@ struct ConstraintDesc {
     BodyHandle bodyB;
     Vec3 anchor;                  // Fixed/Point/Hinge/Slider: shared pivot. Distance: point on A.
     Vec3 anchorB;                 // Distance: point on B.
-    Vec3 axis{0.0f, 1.0f, 0.0f};  // Hinge rotation axis / Slider translation axis.
+    Vec3 axis{0.0f, 1.0f, 0.0f};  // Hinge rotation axis / Slider translation axis / SwingTwist twist axis.
     Vec3 normal{1.0f, 0.0f, 0.0f};// Hinge/Slider: reference direction perpendicular to axis.
     bool hasLimits = false;
     float limitMin = 0.0f;        // Hinge: radians. Slider/Distance: metres.
@@ -82,6 +86,11 @@ struct ConstraintDesc {
     bool motorEnabled = false;    // Hinge/Slider velocity motor.
     float motorTargetVelocity = 0.0f;
     float motorMaxForce = 1.0e4f; // N (slider) or N*m (hinge).
+    float swingLimit = 0.5f;      // SwingTwist: max swing (cone half angle, radians) away from the twist axis.
+    float twistMin = -0.3f;       // SwingTwist: twist limits about the twist axis (radians, -pi..pi).
+    float twistMax = 0.3f;
+    float motorFrequency = 8.0f;  // SwingTwist position motor stiffness (Hz) when driven to a target.
+    float motorDamping = 1.0f;    // SwingTwist position motor damping ratio.
     float breakForce = 0.0f;      // > 0: break when the solver's constraint force exceeds it (N).
     float breakTorque = 0.0f;     // > 0: break on constraint torque (N*m). Fixed/Hinge/Slider.
 };
@@ -178,6 +187,8 @@ public:
     Vec3 getAngularVelocity(BodyHandle body) const;
     Vec3 getCenterOfMass(BodyHandle body) const;
     float getMass(BodyHandle body) const;
+    // World-space axis-aligned bounds of the body's collision shape.
+    bool getBounds(BodyHandle body, Vec3& outMin, Vec3& outMax) const;
     bool isSleeping(BodyHandle body) const;
 
     Status setKinematicTarget(BodyHandle body, const Transform& target);  // Kinematic only.
@@ -189,6 +200,15 @@ public:
     Status addImpulse(BodyHandle body, const Vec3& impulse);             // Instant velocity change.
     Status addImpulseAtPoint(BodyHandle body, const Vec3& impulse, const Vec3& worldPoint);
     Status wake(BodyHandle body);
+    // Switch between Kinematic and Dynamic (e.g. animated bone -> ragdoll). Velocity carries
+    // over, so a body moved by kinematic targets keeps its motion when it becomes dynamic.
+    Status setMotionType(BodyHandle body, MotionType motion);
+    MotionType motionType(BodyHandle body) const;
+
+    // --- Collision groups ---------------------------------------------------------------
+    // Returns a group id (> 0) with `subGroups` sub-groups that all collide by default.
+    uint32_t createCollisionGroup(uint32_t subGroups);
+    Status setSubGroupCollision(uint32_t group, uint32_t subA, uint32_t subB, bool collide);
 
     // --- Constraints ------------------------------------------------------------------
     Result<ConstraintHandle> createConstraint(const ConstraintDesc& desc);
@@ -196,6 +216,9 @@ public:
     bool isConstraintEnabled(ConstraintHandle constraint) const;
     // Hinge: current angle (radians). Slider: current position (m). Others: 0.
     float getConstraintPosition(ConstraintHandle constraint) const;
+    // SwingTwist: drive bodyA towards `relative` = inverse(bodyB rotation) * bodyA rotation
+    // using the position motor (enabled = false makes the joint limp again).
+    Status setSwingTwistTarget(ConstraintHandle constraint, bool enabled, const Quat& relative);
 
     // --- Simulation -------------------------------------------------------------------
     // Advances exactly one fixed step of the active quality profile's fixedDt.

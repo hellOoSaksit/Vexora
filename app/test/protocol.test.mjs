@@ -1,5 +1,5 @@
 // Drives vexora_sim through the same JSON protocol the app uses (no Electron needed).
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -10,9 +10,15 @@ import path from 'node:path';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const exe = path.join(here, '..', 'bin', process.platform === 'win32' ? 'vexora_sim.exe' : 'vexora_sim');
 
+// A failed assertion skips close(); kill leftovers so the test run can never hang.
+const running = new Set();
+after(() => { for (const p of running) p.kill(); });
+
 function startSim() {
   assert.ok(existsSync(exe), `missing ${exe}; run "npm run copy-sim" after building`);
   const proc = spawn(exe, [], { stdio: ['pipe', 'pipe', 'inherit'] });
+  running.add(proc);
+  proc.on('exit', () => running.delete(proc));
   const queue = [];
   const waiters = [];
   createInterface({ input: proc.stdout }).on('line', (line) => {
@@ -42,7 +48,7 @@ const decode = (b64) => { const b = Buffer.from(b64, 'base64'); return new Float
 test('hello lists the schema, devices and which systems can use the GPU', async () => {
   const sim = startSim();
   const hello = await sim.next(type('hello'));
-  assert.deepEqual(hello.schema.scenes.map((s) => s.id), ['drop', 'tower', 'chain', 'fountain']);
+  assert.deepEqual(hello.schema.scenes.map((s) => s.id), ['drop', 'tower', 'chain', 'ragdoll', 'tail', 'fountain']);
   assert.equal(hello.devices[0].backend, 'CPU');
   for (const s of hello.schema.scenes) for (const p of s.params) {
     assert.ok(p.label && p.type, `param ${p.key} needs label and type`);
@@ -55,7 +61,7 @@ test('hello lists the schema, devices and which systems can use the GPU', async 
 test('every scene loads with defaults and simulates', async () => {
   const sim = startSim();
   await sim.next(type('hello'));
-  for (const scene of ['drop', 'tower', 'chain', 'fountain']) {
+  for (const scene of ['drop', 'tower', 'chain', 'ragdoll', 'tail', 'fountain']) {
     sim.send({ cmd: 'load', scene, params: scene === 'fountain' ? { backend: 'cpu' } : {} });
     const loaded = await sim.next(type('loaded'));
     assert.equal(loaded.scene, scene);
@@ -109,5 +115,44 @@ test('actions add bodies; play streams frames; pause stops them', async () => {
   await new Promise((r) => setTimeout(r, 500));
   sim.send({ cmd: 'pause' });
   await sim.next((m) => m.type === 'state' && !m.playing);
+  await sim.close();
+});
+
+test('ragdoll: push makes it fall, get-up blends back to standing', async () => {
+  const sim = startSim();
+  await sim.next(type('hello'));
+  sim.send({ cmd: 'load', scene: 'ragdoll' });
+  const loaded = await sim.next(type('loaded'));
+  assert.equal(loaded.bodies.filter((b) => b.dynamic).length, 12);
+  await sim.next(type('frame'));
+  const pelvisY = (f) => decode(f.bodies)[1];
+  sim.send({ cmd: 'step', count: 30 });
+  const standing = await sim.next(type('frame'));
+  assert.match(standing.stats.character, /Animation/);
+  assert.ok(pelvisY(standing) > 0.85, 'standing pelvis height');
+  sim.send({ cmd: 'action', id: 'push' });
+  sim.send({ cmd: 'step', count: 240 });
+  const fallen = await sim.next(type('frame'));
+  assert.match(fallen.stats.character, /Ragdoll/);
+  assert.ok(pelvisY(fallen) < 0.5, `fallen pelvis height ${pelvisY(fallen)}`);
+  sim.send({ cmd: 'action', id: 'getup' });
+  sim.send({ cmd: 'step', count: 120 });
+  const up = await sim.next(type('frame'));
+  assert.match(up.stats.character, /Animation/);
+  assert.ok(Math.abs(pelvisY(up) - 1.025) < 0.05, `stood back up, pelvis ${pelvisY(up)}`);
+  await sim.close();
+});
+
+test('spring tail stays out of the floor and recovers never', async () => {
+  const sim = startSim();
+  await sim.next(type('hello'));
+  sim.send({ cmd: 'load', scene: 'tail', params: { motion: 'jump', stiffness: 0 } });
+  await sim.next(type('loaded'));
+  await sim.next(type('frame'));
+  sim.send({ cmd: 'step', count: 300 });
+  const f = await sim.next(type('frame'));
+  const xf = decode(f.bodies);
+  for (let i = 1; i < xf.length / 7; i++) assert.ok(xf[i * 7 + 1] > 0, `segment ${i} above floor`);
+  assert.equal(f.stats.springRecoveries, 0);
   await sim.close();
 });

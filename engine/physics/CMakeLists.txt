@@ -8,6 +8,9 @@ add_library(vexora_physics
   src/ComputeDevice.cpp
   src/CpuParticleBackend.cpp
   src/ParticleSystem.cpp
+  src/Skeleton.cpp
+  src/SecondaryMotion.cpp
+  src/Ragdoll.cpp
 )
 add_library(vexora::physics ALIAS vexora_physics)
 target_include_directories(vexora_physics PUBLIC include)

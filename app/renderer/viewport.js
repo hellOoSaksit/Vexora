@@ -148,10 +148,15 @@ export class Viewport {
 
   // Fit the camera to where the scene's objects are (the floor is ignored).
   frameCamera(sceneId) {
-    if (sceneId === 'fountain') {
-      this.orbit.target.set(0, 2.5, 0);
-      this.orbit.radius = 15;
-      this.orbit.pitch = 0.3;
+    const fixed = {
+      fountain: { target: [0, 2.5, 0], radius: 15, pitch: 0.3 },
+      tail: { target: [0, 1, -0.8], radius: 9, pitch: 0.3, yaw: 1.35 },  // Side view: the tail is behind the body.
+    }[sceneId];
+    if (fixed) {
+      this.orbit.target.fromArray(fixed.target);
+      this.orbit.radius = fixed.radius;
+      this.orbit.pitch = fixed.pitch;
+      if (fixed.yaw !== undefined) this.orbit.yaw = fixed.yaw;
       return;
     }
     const box = new THREE.Box3();
@@ -161,7 +166,7 @@ export class Viewport {
     box.min.y = 0;  // Objects fall towards the floor; keep it in view.
     const size = box.getSize(new THREE.Vector3());
     box.getCenter(this.orbit.target);
-    this.orbit.radius = Math.max(8, Math.max(size.x, size.y, size.z) * 1.9);
+    this.orbit.radius = Math.max(sceneId === 'ragdoll' ? 6 : 8, Math.max(size.x, size.y, size.z) * 1.9);
     this.orbit.pitch = sceneId === 'drop' ? 0.45 : 0.25;
   }
 
