@@ -46,7 +46,7 @@
 | Risks | สูงมาก: self-collision, ความเร็ว, GPU vs CPU, คุณภาพผ้าที่ resolution ต่ำ |
 | Acceptance | Scene 7, 8 |
 
-## Phase E — VFX Physics (Particles)
+## Phase E — VFX Physics (Particles) — เริ่มแล้ว: CPU + Vulkan GPU backend, plane/sphere collision (ดู 05-cpu-gpu.md)
 
 | | |
 |---|---|

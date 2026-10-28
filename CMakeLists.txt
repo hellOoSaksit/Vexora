@@ -13,6 +13,7 @@ option(VEXORA_BUILD_TESTS "Build physics test scenes" ON)
 option(VEXORA_BUILD_BENCH "Build physics stress benchmark" ON)
 # Cross-platform determinism costs ~8% performance according to Jolt's docs.
 # OFF by default: we only claim same-binary determinism until a CI matrix verifies more.
+option(VEXORA_PHYSICS_GPU "Build the Vulkan GPU compute backend (particles)" ON)
 option(VEXORA_PHYSICS_CROSS_PLATFORM_DETERMINISM "Build Jolt with CROSS_PLATFORM_DETERMINISTIC" OFF)
 
 if(VEXORA_BUILD_TESTS)

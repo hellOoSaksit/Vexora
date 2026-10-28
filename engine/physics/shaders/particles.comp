@@ -1,0 +1,63 @@
+// GPU twin of updateParticle() in src/ParticleKernel.h. Keep both in sync.
+// Regenerate the embedded SPIR-V with: cmake --build <build> --target vexora_physics_shaders
+#version 450
+layout(local_size_x = 256) in;
+
+struct Particle {
+    vec4 posAge;       // xyz position, w age
+    vec4 velLifetime;  // xyz velocity, w lifetime (<= 0: free slot)
+    vec4 radiusPad;    // x radius
+};
+
+layout(std430, binding = 0) buffer Particles { Particle particles[]; };
+
+layout(std140, binding = 1) uniform Params {
+    vec4 gravityDt;
+    vec4 windDrag;
+    vec4 response;
+    uvec4 counts;
+    vec4 planes[8];
+    vec4 spheres[8];
+} k;
+
+void collide(inout vec3 p, inout vec3 v, vec3 n, float penetration) {
+    p += n * penetration;
+    float vn = dot(v, n);
+    if (vn < 0.0) {
+        vec3 t = v - n * vn;
+        v = t * (1.0 - k.response.y) - n * vn * k.response.x;
+    }
+}
+
+void collidePlanes(inout vec3 p, inout vec3 v, float r) {
+    for (uint c = 0u; c < k.counts.y; ++c) {
+        vec4 pl = k.planes[c];
+        float d = dot(pl.xyz, p) - pl.w - r;
+        if (d < 0.0) collide(p, v, pl.xyz, -d);
+    }
+}
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= k.counts.x) return;
+    Particle q = particles[i];
+    if (q.velLifetime.w <= 0.0) return;
+    float dt = k.gravityDt.w;
+    vec3 p = q.posAge.xyz;
+    vec3 v = q.velLifetime.xyz;
+    float r = q.radiusPad.x;
+    v += (k.gravityDt.xyz + k.windDrag.w * (k.windDrag.xyz - v)) * dt;
+    p += v * dt;
+    collidePlanes(p, v, r);
+    for (uint c = 0u; c < k.counts.z; ++c) {
+        vec4 s = k.spheres[c];
+        vec3 delta = p - s.xyz;
+        float dist = length(delta);
+        float pen = s.w + r - dist;
+        if (pen > 0.0 && dist > 1e-6) collide(p, v, delta / dist, pen);
+    }
+    // Planes are the hard boundary: resolve them again last (see ParticleKernel.h).
+    if (k.counts.z > 0u) collidePlanes(p, v, r);
+    particles[i].posAge = vec4(p, q.posAge.w + dt);
+    particles[i].velLifetime = vec4(v, q.velLifetime.w);
+}

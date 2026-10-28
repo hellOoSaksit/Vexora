@@ -65,6 +65,8 @@ enum class ErrorCode {
     InvalidHandle,
     CapacityExceeded,
     StateMismatch,
+    DeviceUnavailable,  // Requested compute device (e.g. GPU) does not exist or lacks support.
+    DeviceError,        // The device failed at runtime (driver error, device lost, out of memory).
 };
 
 // Result of an API call that can fail. Failures are always reported, never silently ignored.
@@ -75,7 +77,7 @@ struct Result {
     std::string message;
 
     bool ok() const { return error == ErrorCode::None; }
-    static Result success(T v) { return Result{v, ErrorCode::None, {}}; }
+    static Result success(T v) { return Result{std::move(v), ErrorCode::None, {}}; }
     static Result failure(ErrorCode e, std::string msg) { return Result{T{}, e, std::move(msg)}; }
 };
 

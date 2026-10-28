@@ -13,6 +13,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      # CI runners have no GPU. Mesa lavapipe (software Vulkan) lets the GPU code path and the
+      # CPU/GPU parity test run on Linux; it says nothing about real GPU performance.
+      - name: Software Vulkan + shader compiler (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers glslang-tools
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
@@ -24,6 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Software Vulkan + shader compiler
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers glslang-tools
       # Jolt is built without RTTI, so UBSan's vptr check (which needs RTTI) is disabled.
       - name: Configure (ASan + UBSan)
         run: >

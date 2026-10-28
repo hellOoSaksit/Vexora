@@ -43,3 +43,26 @@ if(VEXORA_BUILD_TESTS)
   )
   FetchContent_MakeAvailable(doctest)
 endif()
+
+# GPU compute (Vulkan). Headers are pinned; the Vulkan loader is opened at runtime by volk
+# (MIT), so the application still starts on machines without any Vulkan driver.
+if(VEXORA_PHYSICS_GPU)
+  FetchContent_Declare(
+    VulkanHeaders
+    GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
+    GIT_TAG        vulkan-sdk-1.4.309.0
+    GIT_SHALLOW    TRUE
+  )
+  FetchContent_MakeAvailable(VulkanHeaders)
+
+  set(VOLK_PULL_IN_VULKAN OFF CACHE BOOL "" FORCE)
+  set(VOLK_INSTALL OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+    volk
+    GIT_REPOSITORY https://github.com/zeux/volk.git
+    GIT_TAG        vulkan-sdk-1.4.309.0
+    GIT_SHALLOW    TRUE
+  )
+  FetchContent_MakeAvailable(volk)
+  target_link_libraries(volk PUBLIC Vulkan::Headers)
+endif()

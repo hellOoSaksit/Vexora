@@ -84,7 +84,9 @@ cmake -S . -B build && cmake --build build -j
 - **Setup:** 100 guide strands × 16 จุด หรือ bone chain ของผมหางม้า, หัวหมุน 180° ใน 0.5 s
 - **Acceptance:** ไม่ทะลุ collision capsule ของหัว, ความยาว segment คงที่ ±1%, ไม่มีการสั่นค้างหลังหยุด, เวลา/frame อยู่ในงบที่กำหนดของ Interactive Preview
 
-## Scene 9 — Particle Collision 🟡 Phase E
+## Scene 9 — Particle Collision ✅ (ส่วนแรก) — ผลวัดอยู่ใน [05-cpu-gpu.md](05-cpu-gpu.md) §6
+ไฟล์: `scene09_particles.cpp` — ทำแล้ว: plane + sphere collision, bounce, lifetime, CPU determinism, CPU/GPU parity, การเลือก backend
+ยังไม่ทำ: ชนกับ capsule/mesh ของตัวละคร, ผลวัดบน GPU จริง
 - **Setup:** emitter 10k particles, gravity + wind field, ชนพื้นและ capsule
 - **Acceptance:** ไม่มี particle อยู่ใต้พื้น (CPU: ทุก particle, GPU: ตรวจจาก readback), bounce ตาม restitution ±10%, lifetime ตรงตามกำหนด, CPU simulation ด้วย seed เดิมได้ผลเดิม; GPU ไม่รับประกัน determinism เว้นแต่วัดได้
 - **Performance:** วัด CPU vs GPU ที่ 1k / 10k / 100k particles ก่อนเลือกค่าเริ่มต้น

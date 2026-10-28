@@ -17,7 +17,7 @@
         │                        Jolt Physics v5.3.0 (CPU)       ✅
         ├── Secondary-motion solver (Vexora)                       🟡 Phase C
         ├── Cloth / Hair solver (TBD)                              🟡 Phase D
-        ├── Particle simulation (Vexora, CPU→GPU)                  🟡 Phase E
+        ├── Particle simulation (Vexora, CPU หรือ Vulkan GPU)       ✅ ส่วนแรก (05-cpu-gpu.md)
         └── Simulation Cache / Bake                                🟡 Phase F
 ```
 

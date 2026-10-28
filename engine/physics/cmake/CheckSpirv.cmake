@@ -1,0 +1,10 @@
+# Compiles SRC and compares the SPIR-V words with the COMMITTED header (comments ignored).
+execute_process(COMMAND ${GLSLANG} ${ARGS} -o ${OUT} ${SRC} RESULT_VARIABLE rc OUTPUT_QUIET)
+if(NOT rc EQUAL 0)
+  message(FATAL_ERROR "glslangValidator failed on ${SRC}")
+endif()
+file(STRINGS ${OUT} fresh REGEX "0x")
+file(STRINGS ${COMMITTED} committed REGEX "0x")
+if(NOT fresh STREQUAL committed)
+  message(FATAL_ERROR "src/generated/particles_comp_spv.h is stale: run `cmake --build <build> --target vexora_physics_shaders`")
+endif()

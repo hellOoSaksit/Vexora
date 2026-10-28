@@ -8,6 +8,7 @@
 | [02-architecture.md](02-architecture.md) | ขอบเขตระบบ, Physics World vs Rendering World, transform ownership, ลำดับการคำนวณ, cache, export |
 | [03-test-plan.md](03-test-plan.md) | Test Scenes 1–13: Expected Results, Acceptance Criteria, ค่าที่วัดได้จริง |
 | [04-roadmap.md](04-roadmap.md) | Phase A–F พร้อม Dependencies, Risks, Acceptance, DoD |
+| [05-cpu-gpu.md](05-cpu-gpu.md) | CPU/GPU: ระบบไหนใช้ GPU ได้, Vulkan backend, กฎเลือก Auto/CPU/GPU, ผลวัด |
 
 ## Capability Matrix — สถานะจริง (2026-10-28)
 
@@ -27,7 +28,9 @@
 | Ragdoll, animation/physics blending | Jolt (ragdoll) + Vexora (blend) | 🟡 ออกแบบแล้ว ยังไม่มีโค้ด |
 | Spring secondary motion | Vexora (Preview/การประมาณ) | 🟡 ออกแบบแล้ว ยังไม่มีโค้ด |
 | Cloth / Hair / Soft body | ยังไม่ได้เลือก solver | 🟡 ยังไม่มีโค้ด |
-| Particles (CPU/GPU) | Vexora | 🟡 ยังไม่มีโค้ด |
+| Particles: emitter, lifetime, gravity, wind/drag, ชน plane + sphere | Vexora — CPU (multi-thread) หรือ GPU (Vulkan compute) | ✅ ทดสอบแล้ว (GPU ทดสอบบน software Vulkan เท่านั้น ยังไม่ได้วัดบน GPU จริง) |
+| Particles: trails, sub-emitters, force fields, ชนกับ mesh/ตัวละคร | Vexora | 🟡 ยังไม่มีโค้ด |
+| GPU สำหรับ rigid body | — | ⛔ Jolt ไม่รองรับ (CPU เท่านั้น) |
 | Simulation cache / bake ลงไฟล์ | Vexora (Bake) | 🟡 มีเพียงรากฐาน (snapshot) |
 | Export ไป Game Engine | Export | 🟡 ยังไม่มีโค้ด |
 | Physics UI panels | — | 🟡 ยังไม่มี UI framework ในรีโป |

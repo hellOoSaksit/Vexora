@@ -5,6 +5,7 @@ add_executable(vexora_physics_tests
   scene01_rigid_body_falling.cpp
   scene02_stacking.cpp
   scene03_joints.cpp
+  scene09_particles.cpp
   scene10_determinism_snapshot.cpp
   test_transform_sync_and_events.cpp
 )
