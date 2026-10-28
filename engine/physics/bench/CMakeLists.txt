@@ -1,0 +1,2 @@
+add_executable(vexora_physics_bench stress_bench.cpp)
+target_link_libraries(vexora_physics_bench PRIVATE vexora::physics)
