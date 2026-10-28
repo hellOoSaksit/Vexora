@@ -33,6 +33,6 @@
 | GPU สำหรับ rigid body | — | ⛔ Jolt ไม่รองรับ (CPU เท่านั้น) |
 | Simulation cache / bake ลงไฟล์ | Vexora (Bake) | 🟡 มีเพียงรากฐาน (snapshot) |
 | Export ไป Game Engine | Export | 🟡 ยังไม่มีโค้ด |
-| Physics UI panels | — | 🟡 ยังไม่มี UI framework ในรีโป |
+| แอป Electron: ตั้งค่าจาก schema, viewport 3D, เล่น/หยุด/ทีละขั้น, แผง CPU/GPU, คำเตือนภาษาไทย | Vexora (`app/`, `engine/simserver/`) | ✅ ใช้งานได้ (ทดสอบบน Linux; Windows build ผ่าน CI) — ยังไม่มี Joint editor, Cache inspector, Profiler |
 
 **ระบบ Physics ยังไม่สมบูรณ์** — Phase A (prototype + core rigid body) ใช้งานได้และมี test รองรับ ส่วนอื่นยังเป็นแผน

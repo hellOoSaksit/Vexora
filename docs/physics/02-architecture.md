@@ -180,7 +180,9 @@ Triangle mesh ไม่มีปริมาตร: การชนระหว�
 - `collectDebugDraw()` → bounds (สีตามสถานะ static/active/sleeping/trigger), center of mass, velocity vectors, contact points + normals, constraint lines (สีแดงเมื่อหักแล้ว)
 - `warnings()`, `brokenConstraints()`, `contactEvents()`, `lastStepStats()` (เวลา/step, จำนวน body ที่ active) — เป็นแหล่งข้อมูลของ Solver Warnings และ Performance Profiler
 
-UI panels (Properties, Rigid Body Inspector, Collision Shape Editor, Joint Editor, Bake Controls, Cache Inspector, Profiler) 🟡 — ยังไม่มี UI framework ในรีโป จะสร้างบน API ข้างต้นโดยไม่ถือ simulation state
+แอป Electron (`app/`) ✅ — UI เป็น process แยกจากการคำนวณ: `vexora_sim` (native) ถือ simulation state ทั้งหมด UI ส่งคำสั่งเป็น JSON และวาดเฉพาะผลที่ได้รับ
+ฟอร์มตั้งค่าสร้างจาก schema ที่ `vexora_sim` ส่งมา (`engine/simserver/Schema.cpp`) — เพิ่มพารามิเตอร์ได้โดยไม่ต้องแก้ UI
+ยังไม่มี 🟡: Rigid Body Inspector ต่อวัตถุ, Collision Shape Editor, Joint Editor, Bake Controls, Cache Inspector, Profiler
 
 ## 12. Threading
 

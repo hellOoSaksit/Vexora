@@ -40,4 +40,6 @@ jobs:
       - name: Build
         run: cmake --build build -j 4
       - name: Test scenes
+        env:
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/engine/physics/tests/lsan.supp:print_suppressions=0
         run: ctest --test-dir build --output-on-failure

@@ -1,0 +1,5 @@
+# LeakSanitizer suppressions for the CI sanitizer job.
+# Mesa's software Vulkan driver (lavapipe) keeps a one-time allocation per instance inside
+# vkEnumeratePhysicalDevices (pthread_once in the driver). It is not Vexora's memory: every
+# VkInstance we create is destroyed. Only frames inside the Vulkan loader are suppressed.
+leak:libvulkan.so
