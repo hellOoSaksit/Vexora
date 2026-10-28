@@ -1,5 +1,6 @@
-// Animation clips, baked to local poses at a fixed sample rate on import. Sampling
-// interpolates between baked frames (slerp for rotations, lerp for positions).
+// Animation clips, baked on import to local poses at the source's own keyframe times (plus
+// extra samples where the source curve is not linear). Sampling interpolates between baked
+// frames (slerp for rotations, lerp for positions).
 #pragma once
 
 #include <string>
@@ -11,8 +12,8 @@ namespace vexora::rig {
 
 struct AnimationClip {
     std::string name;
-    double duration = 0.0;     // Seconds.
-    double sampleRate = 60.0;  // Frames per second of `frames`.
+    double duration = 0.0;       // Seconds.
+    std::vector<double> times;   // Ascending time of each frame (seconds).
     std::vector<LocalPose> frames;
 };
 

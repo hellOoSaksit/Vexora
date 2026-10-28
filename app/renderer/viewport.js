@@ -109,6 +109,7 @@ export class Viewport {
   clear() {
     this.root.clear();
     this.dynamic = [];
+    this.character = null;
     if (this.points) {
       this.points.geometry.dispose();
       this.scene.remove(this.points);
@@ -130,7 +131,64 @@ export class Viewport {
       this.points.frustumCulled = false;
       this.scene.add(this.points);
     }
+    if (desc.character) this.addCharacter(desc.character);
     this.frameCamera(desc.scene);
+  }
+
+  // Skinned character: flat list of bones posed in world space each frame (pose comes from
+  // vexora_sim, which already resolved animation / ragdoll / blending).
+  addCharacter(c) {
+    const bones = c.parents.map(() => new THREE.Bone());
+    const inverses = c.parents.map((_, i) => {
+      const o = i * 7, ib = c.inverseBind;
+      return new THREE.Matrix4().compose(new THREE.Vector3(ib[o], ib[o + 1], ib[o + 2]),
+        new THREE.Quaternion(ib[o + 3], ib[o + 4], ib[o + 5], ib[o + 6]), new THREE.Vector3(1, 1, 1));
+    });
+    for (const b of bones) this.root.add(b);
+    const skeleton = new THREE.Skeleton(bones, inverses);
+    for (const m of c.meshes) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(m.positions, 3));
+      g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(m.joints, 4));
+      g.setAttribute('skinWeight', new THREE.BufferAttribute(m.weights, 4));
+      g.setIndex(new THREE.BufferAttribute(m.indices, 1));
+      if (m.normals) g.setAttribute('normal', new THREE.BufferAttribute(m.normals, 3));
+      else g.computeVertexNormals();
+      const mesh = new THREE.SkinnedMesh(g, new THREE.MeshStandardMaterial({ color: m.color, roughness: 0.75, metalness: 0.05 }));
+      mesh.bind(skeleton, new THREE.Matrix4());
+      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.frustumCulled = false;  // Bounds are from the rest pose; poses move far from it.
+      this.root.add(mesh);
+    }
+    let lines = null;
+    if (c.showSkeleton) {
+      const pairs = c.parents.filter((p) => p >= 0).length;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pairs * 6), 3));
+      lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xffd060, depthTest: false }));
+      lines.renderOrder = 10;
+      lines.frustumCulled = false;
+      this.root.add(lines);
+    }
+    this.character = { bones, parents: c.parents, lines };
+  }
+
+  applyCharacterPose(pose) {
+    const { bones, parents, lines } = this.character;
+    for (let i = 0; i < bones.length && (i + 1) * 7 <= pose.length; i++) {
+      bones[i].position.set(pose[i * 7], pose[i * 7 + 1], pose[i * 7 + 2]);
+      bones[i].quaternion.set(pose[i * 7 + 3], pose[i * 7 + 4], pose[i * 7 + 5], pose[i * 7 + 6]);
+    }
+    if (lines) {
+      const a = lines.geometry.attributes.position.array;
+      let k = 0;
+      parents.forEach((p, i) => {
+        if (p < 0) return;
+        a.set([pose[p * 7], pose[p * 7 + 1], pose[p * 7 + 2], pose[i * 7], pose[i * 7 + 1], pose[i * 7 + 2]], k);
+        k += 6;
+      });
+      lines.geometry.attributes.position.needsUpdate = true;
+    }
   }
 
   addBodies(bodies) {
@@ -151,6 +209,7 @@ export class Viewport {
     const fixed = {
       fountain: { target: [0, 2.5, 0], radius: 15, pitch: 0.3 },
       tail: { target: [0, 1, -0.8], radius: 9, pitch: 0.3, yaw: 1.35 },  // Side view: the tail is behind the body.
+      character: { target: [0, 0.9, 0], radius: 5, pitch: 0.2 },
     }[sceneId];
     if (fixed) {
       this.orbit.target.fromArray(fixed.target);
@@ -182,6 +241,7 @@ export class Viewport {
         if (frame.sleep) mesh.material = this.materialFor(mesh.userData.color, frame.sleep[i] === 1);
       }
     }
+    if (this.character && frame.pose) this.applyCharacterPose(frame.pose);
     if (this.points && frame.particles) {
       const geometry = this.points.geometry;
       geometry.setAttribute('position', new THREE.BufferAttribute(frame.particles, 3));

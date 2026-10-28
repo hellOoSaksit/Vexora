@@ -7,6 +7,7 @@
 Only the **Physics & Simulation core (Phase A)** exists so far: `engine/physics`, a C++17 library built on
 [Jolt Physics](https://github.com/jrouwe/JoltPhysics) v5.3.0 (MIT), with headless test scenes and a stress benchmark, plus a particle system with CPU and Vulkan GPU backends
 (rigid bodies are CPU-only).
+Character rig import (glTF), skinning and animation playback live in `engine/rig` ([docs/rig](docs/rig/README.md)).
 See [docs/physics](docs/physics/README.md) for the engine evaluation, architecture, test plan with measured results,
 and roadmap.
 
@@ -31,6 +32,9 @@ app/                     Electron UI (plain HTML/JS + three.js, no bundler)
   main.js                window + starts the background simulation process (vexora_sim)
   renderer/              settings forms are generated from the schema vexora_sim sends
 engine/simserver/        vexora_sim: JSON-lines protocol on stdin/stdout, scenes, settings schema
+engine/core/             shared math and Result types
+engine/rig/              skeleton, poses, skinning, animation clips, glTF import (cgltf)
+assets/samples/          CC-BY / CC0 glTF sample characters (see its README for credits)
 ```
 
 ## Build and test
@@ -65,4 +69,5 @@ docs/physics/                            design and evaluation documents
 - volk — MIT
 - Vulkan-Headers — Apache-2.0 / MIT
 - nlohmann/json — MIT
+- cgltf — MIT
 - Electron, three.js — MIT

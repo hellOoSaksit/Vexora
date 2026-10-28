@@ -47,6 +47,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+# glTF 2.0 parser (MIT), single header. SOURCE_SUBDIR points nowhere so only headers are used.
+FetchContent_Declare(
+  cgltf
+  GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
+  GIT_TAG        v1.15
+  GIT_SHALLOW    TRUE
+  SOURCE_SUBDIR  none
+)
+FetchContent_MakeAvailable(cgltf)
+
 if(VEXORA_BUILD_TESTS)
   FetchContent_Declare(
     doctest

@@ -16,7 +16,7 @@ after(() => { for (const p of running) p.kill(); });
 
 function startSim() {
   assert.ok(existsSync(exe), `missing ${exe}; run "npm run copy-sim" after building`);
-  const proc = spawn(exe, [], { stdio: ['pipe', 'pipe', 'inherit'] });
+  const proc = spawn(exe, ['--samples', path.join(here, '..', '..', 'assets', 'samples')], { stdio: ['pipe', 'pipe', 'inherit'] });
   running.add(proc);
   proc.on('exit', () => running.delete(proc));
   const queue = [];
@@ -48,7 +48,7 @@ const decode = (b64) => { const b = Buffer.from(b64, 'base64'); return new Float
 test('hello lists the schema, devices and which systems can use the GPU', async () => {
   const sim = startSim();
   const hello = await sim.next(type('hello'));
-  assert.deepEqual(hello.schema.scenes.map((s) => s.id), ['drop', 'tower', 'chain', 'ragdoll', 'tail', 'fountain']);
+  assert.deepEqual(hello.schema.scenes.map((s) => s.id), ['drop', 'tower', 'chain', 'ragdoll', 'tail', 'character', 'fountain']);
   assert.equal(hello.devices[0].backend, 'CPU');
   for (const s of hello.schema.scenes) for (const p of s.params) {
     assert.ok(p.label && p.type, `param ${p.key} needs label and type`);
@@ -61,7 +61,7 @@ test('hello lists the schema, devices and which systems can use the GPU', async 
 test('every scene loads with defaults and simulates', async () => {
   const sim = startSim();
   await sim.next(type('hello'));
-  for (const scene of ['drop', 'tower', 'chain', 'ragdoll', 'tail', 'fountain']) {
+  for (const scene of ['drop', 'tower', 'chain', 'ragdoll', 'tail', 'character', 'fountain']) {
     sim.send({ cmd: 'load', scene, params: scene === 'fountain' ? { backend: 'cpu' } : {} });
     const loaded = await sim.next(type('loaded'));
     assert.equal(loaded.scene, scene);
@@ -154,5 +154,28 @@ test('spring tail stays out of the floor and recovers never', async () => {
   const xf = decode(f.bodies);
   for (let i = 1; i < xf.length / 7; i++) assert.ok(xf[i * 7 + 1] > 0, `segment ${i} above floor`);
   assert.equal(f.stats.springRecoveries, 0);
+  await sim.close();
+});
+
+test('glTF character: imports, animates, ragdolls and reports what it changed', async () => {
+  const sim = startSim();
+  await sim.next(type('hello'));
+  sim.send({ cmd: 'load', scene: 'character', params: { model: 'Fox' } });
+  const loaded = await sim.next(type('loaded'));
+  assert.equal(loaded.character.parents.length, 24);
+  assert.deepEqual(loaded.character.clips.map((c) => c.name), ['Survey', 'Walk', 'Run']);
+  assert.ok(loaded.character.notes.some((n) => n.includes('1.70')), 'resize is reported');
+  assert.equal(typeof loaded.character.meshes[0].positions.$f32, 'string');
+  await sim.next(type('frame'));
+  sim.send({ cmd: 'step', count: 30 });
+  const f = await sim.next(type('frame'));
+  assert.equal(Buffer.from(f.pose.$f32, 'base64').length, 24 * 7 * 4);
+  sim.send({ cmd: 'action', id: 'nextClip' });
+  sim.send({ cmd: 'step', count: 2 });
+  assert.equal((await sim.next(type('frame'))).stats.clip, 'Walk');
+  sim.send({ cmd: 'load', scene: 'character', params: { model: 'custom', customFile: '' } });
+  assert.match((await sim.next(type('error'))).message, /เลือกไฟล์/);
+  sim.send({ cmd: 'load', scene: 'character', params: { model: 'custom', customFile: '/no/such/file.glb' } });
+  assert.match((await sim.next(type('error'))).message, /โหลดไฟล์ตัวละครไม่ได้/);
   await sim.close();
 });

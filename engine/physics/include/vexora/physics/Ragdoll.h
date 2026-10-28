@@ -86,4 +86,11 @@ struct DemoHumanoid {
 };
 DemoHumanoid makeDemoHumanoid();
 
+// Builds ragdoll parts for any skeleton (imported characters): one capsule per bone whose
+// longest child segment is at least `minBoneLength` (m), radius = 22% of that length (capped),
+// mass from capsule volume at `density`, generic joint limits. Bones without a part follow
+// their parent. This is a starting point; hand-tuned settings give better results.
+RagdollSettings makeAutoRagdoll(const Skeleton& skeleton, const ModelPose& restModel, float minBoneLength,
+                                float density = 1000.0f);
+
 }  // namespace vexora::physics

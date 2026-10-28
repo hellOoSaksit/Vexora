@@ -258,4 +258,37 @@ DemoHumanoid makeDemoHumanoid() {
     return h;
 }
 
+RagdollSettings makeAutoRagdoll(const Skeleton& sk, const ModelPose& rest, float minLength, float density) {
+    RagdollSettings settings;
+    const size_t n = sk.bones.size();
+    // Longest child per bone.
+    std::vector<int> child(n, -1);
+    std::vector<float> length(n, 0.0f);
+    for (size_t b = 0; b < n; ++b) {
+        const int p = sk.bones[b].parent;
+        if (p < 0) continue;
+        const float l = (rest[b].position - rest[size_t(p)].position).length();
+        if (l > length[size_t(p)]) {
+            length[size_t(p)] = l;
+            child[size_t(p)] = int(b);
+        }
+    }
+    float maxLength = 0.0f;
+    for (float l : length) maxLength = std::max(maxLength, l);
+    for (size_t b = 0; b < n; ++b) {
+        if (child[b] < 0 || length[b] < minLength) continue;
+        RagdollPart p;
+        p.bone = int(b);
+        p.childBone = child[b];
+        p.radius = std::min(length[b] * 0.22f, maxLength * 0.18f);
+        const float cylinder = std::max(0.0f, length[b] - p.radius);
+        p.mass = std::max(0.2f, density * 3.14159265f * p.radius * p.radius * (cylinder + p.radius * 4.0f / 3.0f));
+        p.swingLimit = 0.7f;
+        p.twistMin = -0.4f;
+        p.twistMax = 0.4f;
+        settings.parts.push_back(p);
+    }
+    return settings;
+}
+
 }  // namespace vexora::physics

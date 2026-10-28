@@ -218,6 +218,7 @@ function renderStats(stats, t) {
     ['เวลาคำนวณต่อขั้น', `${fmt.format(stats.physicsMs + (stats.particleMs ?? 0))} ms`],
   ];
   if (stats.character) rows.push(['ตัวละคร', stats.character]);
+  if (stats.clip) rows.push(['ท่าที่เล่น', stats.clip]);
   if (stats.particlesAlive !== undefined) rows.push(['อนุภาคที่มีอยู่', fmt.format(stats.particlesAlive)]);
   if (state.brokenTotal) rows.push(['ข้อต่อที่ขาด', fmt.format(state.brokenTotal)]);
   if (state.playing && stats.speed !== undefined) rows.push(['ความเร็วเทียบเวลาจริง', `${Math.round(stats.speed * 100)}%`]);
@@ -248,6 +249,18 @@ function renderWarnings() {
     card.append(el('strong', '', `${text.title} (${fmt.format(w.count)} ครั้ง)`), el('span', '', text.hint));
     box.append(card);
   }
+}
+
+// What the importer changed or could not keep (resizes, unsupported features), in the open.
+function renderImportNotes(character) {
+  const box = $('scene-desc');
+  box.querySelector('.notes')?.remove();
+  if (!character) return;
+  const notes = el('div', 'notes');
+  const clips = character.clips.map((c, i) => `${i + 1}. ${c.name} (${fmt.format(c.duration)} s)`).join(', ');
+  notes.append(el('div', 'notice info', `ท่าในไฟล์: ${clips || 'ไม่มี'}`));
+  for (const n of character.notes) notes.append(el('div', 'notice warn', n));
+  box.append(notes);
 }
 
 let toastTimer = 0;
@@ -290,6 +303,7 @@ window.vexora.onMessage((msg) => {
       for (const id of ['btn-play', 'btn-reset']) $(id).disabled = false;
       setPlaying(false);
       if (!viewport.noWebGL) $('overlay').textContent = `${sceneDef(msg.scene)?.label ?? ''} · ${msg.bodies.length} วัตถุ`;
+      renderImportNotes(msg.character);
       if (state.resumeAfterLoad) send({ cmd: 'play' });
       renderDevices();
       break;

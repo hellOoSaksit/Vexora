@@ -12,4 +12,5 @@ add_executable(vexora_physics_tests
   test_transform_sync_and_events.cpp
 )
 target_link_libraries(vexora_physics_tests PRIVATE vexora::physics doctest::doctest)
+target_compile_definitions(vexora_physics_tests PRIVATE VEXORA_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/assets/samples")
 add_test(NAME vexora_physics_tests COMMAND vexora_physics_tests)

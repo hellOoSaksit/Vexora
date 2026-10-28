@@ -112,3 +112,5 @@ details summary { cursor: pointer; }
 .warning { background: #3a3020; border: 1px solid #6b5527; border-radius: 6px; padding: 8px 10px; font-size: 12px; line-height: 1.5; }
 .warning.bad { background: #3a1f1c; border-color: #7a3a32; }
 .warning strong { display: block; margin-bottom: 2px; }
+.field .file-name { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.notes { margin-top: 10px; }

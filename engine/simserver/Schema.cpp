@@ -54,6 +54,17 @@ ParamDef choice(std::string key, std::string label, std::vector<ParamOption> opt
     return p;
 }
 
+ParamDef file(std::string key, std::string label, std::vector<ParamOption> extensions, std::string help) {
+    ParamDef p;
+    p.key = std::move(key);
+    p.label = std::move(label);
+    p.type = ParamType::File;
+    p.options = std::move(extensions);
+    p.defaultValue = "";
+    p.help = std::move(help);
+    return p;
+}
+
 std::vector<ParamOption> materialOptions() {
     return {{"metal", "โลหะ"},  {"wood", "ไม้"},   {"stone", "หิน"},           {"rubber", "ยาง (เด้งมาก)"},
             {"ice", "น้ำแข็ง (ลื่น)"}, {"fabric", "ผ้า"}, {"flesh", "เนื้อ/ร่างกาย"}};
@@ -147,6 +158,27 @@ const std::vector<SceneDef>& scenes() {
              number("weight", "น้ำหนักการผสม", 0, 1, 0.05, 1, "", "0 = ตาม Animation ล้วน, 1 = สปริงเต็มที่", true),
          },
          {{"reset", "รีเซ็ตสปริง"}}},
+        {"character",
+         "ตัวละคร (glTF)",
+         "โหลดตัวละครที่มีโครงกระดูกจากไฟล์ glTF เล่น Animation แล้วผลักให้ล้มเป็น Ragdoll ได้ (ragdoll สร้างอัตโนมัติจากโครงกระดูก)",
+         {
+             choice("model", "ตัวละคร",
+                    {{"RiggedFigure", "ตัวอย่าง: คนเดิน (RiggedFigure)"}, {"Fox", "ตัวอย่าง: สุนัขจิ้งจอก (Fox)"},
+                     {"RiggedSimple", "ตัวอย่าง: ทรงกระบอกงอ (RiggedSimple)"}, {"custom", "ไฟล์ของฉัน…"}},
+                    "RiggedFigure", "ตัวอย่างจาก Khronos glTF Sample Assets (CC-BY 4.0 / CC0)"),
+             file("customFile", "ไฟล์ตัวละคร", {{".glb", "glTF Binary"}, {".gltf", "glTF"}}, "ใช้เมื่อเลือก 'ไฟล์ของฉัน…' (.glb หรือ .gltf ที่มี skin)"),
+             choice("size", "ขนาดตัวละคร",
+                    {{"auto", "อัตโนมัติ (ปรับถ้าขนาดในไฟล์ผิดปกติ)"}, {"file", "ตามไฟล์"}, {"fit", "กำหนดความสูงเอง"}}, "auto",
+                    "หลายไฟล์ใช้หน่วยเซนติเมตร ทำให้ตัวละครใหญ่ผิดปกติ ฟิสิกส์จะดูช้าเหมือนของยักษ์"),
+             number("height", "ความสูงเมื่อกำหนดเอง", 0.1, 10, 0.05, 1.7, "m", ""),
+             integer("clip", "ท่า (ลำดับในไฟล์)", 1, 50, 1, "", "ดูชื่อท่าทั้งหมดได้ที่แถบสถานะ"),
+             number("playbackSpeed", "ความเร็วการเล่นท่า", 0, 3, 0.05, 1, "เท่า", ""),
+             number("pushStrength", "แรงผลัก", 0, 400, 5, 60, "N·s", "แรงนี้คิดกับตัวละครสูง 1.7 m แล้วปรับตามขนาดจริง"),
+             number("getUpTime", "เวลาผสมกลับเป็น Animation", 0.1, 3, 0.1, 0.8, "s", "", true),
+             boolean("showRagdoll", "แสดง capsule ของ ragdoll", false, "ช่วยตรวจว่ากระดูกที่ใช้คำนวณตรงกับตัวละครไหม", true),
+             boolean("showSkeleton", "แสดงกระดูก", false, "", true),
+         },
+         {{"push", "ผลักให้ล้ม"}, {"getup", "ลุกขึ้น"}, {"nextClip", "ท่าถัดไป"}}},
         {"fountain",
          "น้ำพุอนุภาค",
          "อนุภาคพุ่งขึ้นแล้วตกกระทบพื้นและลูกบอล ใช้ GPU ได้",
@@ -172,6 +204,12 @@ const std::vector<SceneDef>& scenes() {
     return list;
 }
 
+namespace {
+std::string gSamplesDir = "assets/samples";
+}
+void setSamplesDir(const std::string& dir) { gSamplesDir = dir; }
+const std::string& samplesDir() { return gSamplesDir; }
+
 const SceneDef* findScene(const std::string& id) {
     for (const SceneDef& s : scenes())
         if (s.id == id) return &s;
@@ -186,6 +224,7 @@ const char* typeName(ParamType t) {
         case ParamType::Int: return "int";
         case ParamType::Bool: return "bool";
         case ParamType::Enum: return "enum";
+        case ParamType::File: return "file";
     }
     return "number";
 }
@@ -199,7 +238,7 @@ json paramJson(const ParamDef& p) {
         j["step"] = p.step;
         j["unit"] = p.unit;
     }
-    if (p.type == ParamType::Enum) {
+    if (p.type == ParamType::Enum || p.type == ParamType::File) {
         j["options"] = json::array();
         for (const ParamOption& o : p.options) j["options"].push_back({{"value", o.value}, {"label", o.label}});
     }
@@ -248,6 +287,13 @@ bool resolveParams(const std::vector<ParamDef>& defs, const json& input, json& o
             case ParamType::Bool:
                 if (!v.is_boolean()) {
                     error = "ค่า '" + p.label + "' ต้องเป็น เปิด/ปิด";
+                    return false;
+                }
+                out[p.key] = v;
+                break;
+            case ParamType::File:
+                if (!v.is_string()) {
+                    error = "ค่า '" + p.label + "' ต้องเป็นตำแหน่งไฟล์";
                     return false;
                 }
                 out[p.key] = v;

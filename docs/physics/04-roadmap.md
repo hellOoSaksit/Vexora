@@ -37,6 +37,12 @@
 | Acceptance | Scene 4, 5, 6, 8 (bone chain) ตามเกณฑ์ใน test plan |
 | ทางเลือกสำรอง | หาก ragdoll บน Jolt ไม่ผ่าน Scene 4 หลัง tuning → ประเมิน PhysX articulations |
 
+## Phase R — Rig & Animation (เพิ่มตามที่ตกลง) — R1–R4 เสร็จ: ดู [docs/rig/README.md](../rig/README.md)
+| | |
+|---|---|
+| ทำแล้ว | core/rig แยกโมดูล, glTF import, skinning, clip playback, auto ragdoll, ฉากตัวละครในแอป |
+| ถัดไป | R5 เครื่องมือ Rig ใน UI, IK, FBX (ประเมิน ufbx), animation blending หลายท่า |
+
 ## Phase D — Advanced Simulation (Cloth, Hair, Soft Body)
 
 | | |

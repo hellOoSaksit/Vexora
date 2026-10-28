@@ -11,7 +11,7 @@ namespace vexora::sim {
 
 using nlohmann::json;
 
-enum class ParamType { Number, Int, Bool, Enum };
+enum class ParamType { Number, Int, Bool, Enum, File };
 
 struct ParamOption {
     std::string value;
@@ -26,7 +26,7 @@ struct ParamDef {
     double min = 0.0, max = 1.0, step = 0.1;
     json defaultValue;
     std::string unit;
-    std::vector<ParamOption> options;  // Enum only
+    std::vector<ParamOption> options;  // Enum only; File: options = accepted extensions (value) + label.
     bool advanced = false;             // Hidden in the UI's simple mode.
 };
 
@@ -48,6 +48,10 @@ const std::vector<SceneDef>& scenes();
 const SceneDef* findScene(const std::string& id);
 
 json schemaJson();
+
+// Directory holding the bundled sample characters (set from the command line).
+void setSamplesDir(const std::string& dir);
+const std::string& samplesDir();
 
 // Fills defaults for missing keys and validates the rest. On failure returns false and sets
 // a message that names the parameter by its user-facing label.

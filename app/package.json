@@ -36,6 +36,14 @@
       {
         "from": "bin",
         "to": "bin"
+      },
+      {
+        "from": "../assets/samples",
+        "to": "samples",
+        "filter": [
+          "*.glb",
+          "*.md"
+        ]
       }
     ],
     "win": {

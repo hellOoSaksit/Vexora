@@ -100,6 +100,17 @@ export function createForm(container, params, values, onCommit) {
       });
       head.replaceChildren(el('label', { class: 'switch', for: id }, [box, p.label]));
       if (p.advanced) head.append(el('span', { class: 'adv', text: 'ขั้นสูง' }));
+    } else if (p.type === 'file') {
+      const name = el('span', { class: 'file-name', text: current[p.key] ? current[p.key].split(/[\\/]/).pop() : 'ยังไม่ได้เลือกไฟล์' });
+      const button = el('button', { type: 'button', id, text: 'เลือกไฟล์…' });
+      button.addEventListener('click', async () => {
+        const picked = await window.vexora.pickFile(p.options);
+        if (!picked) return;
+        current[p.key] = picked;
+        name.textContent = picked.split(/[\\/]/).pop();
+        onCommit(p.key, picked);
+      });
+      field.append(el('div', { class: 'field-row' }, [button, name]));
     } else if (p.type === 'enum') {
       const select = el('select', { id });
       for (const o of p.options) {

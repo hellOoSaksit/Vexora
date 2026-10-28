@@ -181,3 +181,43 @@ TEST_CASE("Scene04: invalid ragdoll definitions are rejected; destroying the rag
     CHECK(world.bodyCount() == before);
     world.step();
 }
+
+#include "vexora/rig/GltfImport.h"
+
+TEST_CASE("Scene04: auto ragdoll from imported glTF characters falls and settles") {
+    for (const char* name : {"RiggedFigure.glb", "Fox.glb"}) {
+        auto imported = vexora::rig::importGltf(std::string(VEXORA_SAMPLES_DIR) + "/" + name);
+        REQUIRE(imported.ok());
+        vexora::rig::ImportedCharacter ch = std::move(imported.value);
+        const float height = ch.boundsMax.y - ch.boundsMin.y;
+        vexora::rig::scaleCharacter(ch, 1.0f / height);  // 1 m tall regardless of file units.
+        const RagdollSettings settings = makeAutoRagdoll(ch.skeleton, ch.restModel, 0.05f);
+        PhysicsWorld world({{0, -9.81f, 0}, QualityProfile::HighQualityPreview});
+        addBoxFloor(world);
+        const Transform at{{0, 0.3f - ch.boundsMin.y, 0}, {}};
+        auto rd = Ragdoll::create(world, ch.skeleton, settings, ch.restModel, at);
+        INFO(rd.message);
+        REQUIRE(rd.ok());
+        rd.value->setDrive(BoneDrive::Simulated);
+        float lowest = 1e9f;
+        bool warned = false;
+        for (int i = 0, n = int(6.0 / world.fixedDt()); i < n; ++i) {
+            world.step();
+            warned |= !world.warnings().empty();
+            for (size_t p = 0; p < rd.value->partCount(); ++p) {
+                Vec3 lo, hi;
+                world.getBounds(rd.value->body(p), lo, hi);
+                lowest = std::min(lowest, lo.y);
+            }
+        }
+        float speed = 0.0f;
+        for (size_t p = 0; p < rd.value->partCount(); ++p) speed = std::max(speed, world.getLinearVelocity(rd.value->body(p)).length());
+        VX_REPORT("auto ragdoll %s: %zu parts from %zu bones, lowest=%.4f m, speed after 6 s=%.4f m/s", name, rd.value->partCount(),
+                  ch.skeleton.bones.size(), lowest, speed);
+        CAPTURE(name);
+        CHECK(rd.value->partCount() >= 5);
+        CHECK_FALSE(warned);
+        CHECK(lowest > -0.03f);
+        CHECK(speed < 0.05f);
+    }
+}

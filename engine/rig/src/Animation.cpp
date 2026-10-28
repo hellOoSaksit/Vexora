@@ -14,11 +14,13 @@ LocalPose sample(const AnimationClip& clip, double t, bool loop) {
     } else {
         t = std::clamp(t, 0.0, clip.duration);
     }
-    const double f = t * clip.sampleRate;
+    // Frame interval containing t.
+    const auto it = std::upper_bound(clip.times.begin(), clip.times.end(), t);
     const size_t last = clip.frames.size() - 1;
-    const size_t i = std::min(last, size_t(std::floor(f)));
-    const size_t j = std::min(last, i + 1);
-    const float u = float(std::clamp(f - double(i), 0.0, 1.0));
+    const size_t j = std::min(last, size_t(it - clip.times.begin()));
+    const size_t i = j == 0 ? 0 : j - 1;
+    const double span = clip.times[j] - clip.times[i];
+    const float u = span > 0.0 ? float(std::clamp((t - clip.times[i]) / span, 0.0, 1.0)) : 0.0f;
     const LocalPose& a = clip.frames[i];
     const LocalPose& b = clip.frames[j];
     LocalPose out(a.size());

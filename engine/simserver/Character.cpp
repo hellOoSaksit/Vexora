@@ -158,8 +158,8 @@ void Session::postStep(double) {
 }
 
 const char* Session::characterState() const {
-    if (!actors_.empty()) {
-        const std::string& s = actors_.front().state;
+    if (!actors_.empty() || hasCharacter_) {
+        const std::string& s = hasCharacter_ ? characterActor_.state : actors_.front().state;
         if (s == "animated") return "ยืน (Animation ควบคุม)";
         if (s == "ragdoll") return "ล้ม (Ragdoll — ฟิสิกส์ควบคุม)";
         if (s == "powered") return "เกร็งตัว (ฟิสิกส์ + มอเตอร์ข้อต่อ)";

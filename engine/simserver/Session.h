@@ -11,6 +11,7 @@
 #include "vexora/physics/PhysicsWorld.h"
 #include "vexora/physics/Ragdoll.h"
 #include "vexora/physics/SecondaryMotion.h"
+#include "vexora/rig/GltfImport.h"
 
 namespace vexora::sim {
 
@@ -61,6 +62,9 @@ private:
     int addVirtual(const std::string& shape, physics::Vec3 size, uint32_t color);
     physics::Transform transformOf(const RenderBody& b) const;
     bool buildRagdoll(const json& p, std::string& error);
+    bool buildCharacter(const json& p, std::string& error);
+    void stepCharacter(double dt);
+    physics::LocalPose characterAnimPose() const;
     void buildTail(const json& p);
     physics::LocalPose idlePose(double t) const;
     void preStep(double dt);
@@ -81,6 +85,15 @@ private:
     // Ragdoll scene.
     physics::DemoHumanoid human_;
     std::vector<Actor> actors_;
+    // Imported character scene.
+    bool hasCharacter_ = false;
+    rig::ImportedCharacter character_;
+    Actor characterActor_;
+    size_t clipIndex_ = 0;
+    double clipTime_ = 0.0;
+    float characterScale_ = 1.0f;
+    physics::ModelPose characterPose_;   // Final pose drawn this frame (model space).
+    std::vector<std::string> importNotes_;
     // Spring tail scene.
     physics::Skeleton tailSkeleton_;
     std::unique_ptr<physics::SecondaryMotion> spring_;

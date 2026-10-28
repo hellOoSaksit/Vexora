@@ -4,4 +4,6 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('vexora', {
   send: (cmd) => ipcRenderer.send('sim:send', cmd),
   onMessage: (callback) => ipcRenderer.on('sim:message', (_event, msg) => callback(msg)),
+  // Native file picker; resolves to a path or null if cancelled.
+  pickFile: (extensions) => ipcRenderer.invoke('dialog:openFile', extensions),
 });

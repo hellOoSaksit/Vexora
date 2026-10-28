@@ -9,6 +9,10 @@
 #include "Base64.h"
 
 namespace vexora::sim {
+json tagged(const char* type, const void* data, size_t bytes);
+}
+
+namespace vexora::sim {
 
 using namespace vexora::physics;
 
@@ -75,6 +79,9 @@ void Session::addFloor() {
 
 bool Session::load(const std::string& sceneId, const json& params, const json& global, std::string& error) {
     actors_.clear();  // Ragdolls reference the world: destroy them first.
+    characterActor_ = Actor{};
+    hasCharacter_ = false;
+    importNotes_.clear();
     spring_.reset();
     virtualXf_.clear();
     world_.reset();
@@ -101,6 +108,15 @@ bool Session::load(const std::string& sceneId, const json& params, const json& g
     else if (sceneId == "tower") buildTower(params);
     else if (sceneId == "chain") buildChain(params);
     else if (sceneId == "tail") buildTail(params);
+    else if (sceneId == "character") {
+        if (!buildCharacter(params, error)) {
+            characterActor_ = Actor{};
+            hasCharacter_ = false;
+            world_.reset();
+            bodies_.clear();
+            return false;
+        }
+    }
     else if (sceneId == "ragdoll") {
         if (!buildRagdoll(params, error)) {
             actors_.clear();
@@ -254,8 +270,13 @@ double Session::fixedDt() const { return world_ ? world_->fixedDt() : 1.0 / 60.0
 bool Session::step(std::string& error) {
     if (!world_) return true;
     preStep(world_->fixedDt());
+    if (hasCharacter_) stepCharacter(world_->fixedDt());
     world_->step();
     postStep(world_->fixedDt());
+    if (hasCharacter_) {
+        const ModelPose anim = toModel(character_.skeleton, characterAnimPose());
+        characterPose_ = characterActor_.state == "animated" ? anim : characterActor_.ragdoll->physicsPose(anim, characterActor_.root);
+    }
     physicsMs_ += world_->lastStepStats().stepMilliseconds;
     for (const SolverWarning& w : world_->warnings()) warnings_.push_back(w);
     brokenSinceFrame_ += world_->brokenConstraints().size();
@@ -326,6 +347,42 @@ bool Session::action(const std::string& id, std::string& error) {
         }
         return true;
     }
+    if (sceneId_ == "character" && hasCharacter_) {
+        Actor& a = characterActor_;
+        if (id == "push") {
+            a.ragdoll->setDrive(BoneDrive::Simulated);
+            a.state = "ragdoll";
+            // Same push feels the same at any size: scale by mass (~ height^3) relative to 1.7 m.
+            const float h = character_.boundsMax.y - character_.boundsMin.y;
+            const float strength = float(params_["pushStrength"].get<double>()) * std::pow(h / 1.7f, 3.0f);
+            const size_t mid = a.ragdoll->partCount() / 2;
+            world_->addImpulse(a.ragdoll->body(mid), a.root.rotation.rotate({0.0f, 0.2f * strength, -strength}));
+            return true;
+        }
+        if (id == "getup") {
+            if (a.state == "animated") return true;
+            // Stand up where the character landed: shift the root so the first ragdoll bone's
+            // animated position (horizontally) matches where physics left it. Keep the heading.
+            const ModelPose anim = toModel(character_.skeleton, characterAnimPose());
+            const ModelPose phys = a.ragdoll->physicsPose(anim, a.root);
+            int anchor = 0;
+            while (anchor < int(anim.size()) && a.ragdoll->partForBone(anchor) != 0) ++anchor;
+            const Vec3 delta = (a.root * phys[size_t(anchor)]).position - (a.root * anim[size_t(anchor)]).position;
+            const Vec3 forward = a.root.rotation.rotate({0, 0, 1});
+            a.root = {{a.root.position.x + delta.x, a.root.position.y, a.root.position.z + delta.z},
+                      Quat::fromAxisAngle({0, 1, 0}, std::atan2(forward.x, forward.z))};
+            a.blendFrom = toLocal(character_.skeleton, a.ragdoll->physicsPose(anim, a.root));
+            a.blendTime = 0.0;
+            a.ragdoll->setDrive(BoneDrive::Animated);
+            a.state = "gettingup";
+            return true;
+        }
+        if (id == "nextClip") {
+            if (!character_.clips.empty()) clipIndex_ = (clipIndex_ + 1) % character_.clips.size();
+            clipTime_ = 0.0;
+            return true;
+        }
+    }
     if (sceneId_ == "tail" && id == "reset") {
         spring_->reset(toModel(tailSkeleton_, restPose(tailSkeleton_)), tailRoot_);
         postStep(0.0);
@@ -349,11 +406,43 @@ json Session::describeScene() const {
     size_t dynamicIndex = 0;
     for (const RenderBody& b : bodies_)
         list.push_back(bodyJson(b.dynamic ? json(dynamicIndex++) : json(-1), b.shape, b.size, b.color, b.dynamic, transformOf(b)));
-    return {{"scene", sceneId_},
+    json desc = {{"scene", sceneId_},
             {"bodies", list},
             {"fixedDt", fixedDt()},
             {"particles", particles_ != nullptr},
             {"particleRadius", 0.02}};
+    if (hasCharacter_) {
+        json meshes = json::array();
+        for (const rig::SkinnedMesh& m : character_.meshes) {
+            std::vector<float> w;
+            for (const auto& q : m.weights) w.insert(w.end(), q.begin(), q.end());
+            json mesh = {{"name", m.name},
+                         {"positions", tagged("$f32", m.positions.data(), m.positions.size() * sizeof(Vec3))},
+                         {"joints", tagged("$u16", m.joints.data(), m.joints.size() * sizeof(m.joints[0]))},
+                         {"weights", tagged("$f32", w.data(), w.size() * sizeof(float))},
+                         {"indices", tagged("$u32", m.indices.data(), m.indices.size() * sizeof(uint32_t))},
+                         {"color", 0xd9a77a}};
+            if (!m.normals.empty()) mesh["normals"] = tagged("$f32", m.normals.data(), m.normals.size() * sizeof(Vec3));
+            meshes.push_back(mesh);
+        }
+        std::vector<float> inv;
+        json parents = json::array();
+        for (size_t b = 0; b < character_.skeleton.bones.size(); ++b) {
+            const Transform& t = character_.meshes.front().inverseBind[b];
+            inv.insert(inv.end(), {t.position.x, t.position.y, t.position.z, t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w});
+            parents.push_back(character_.skeleton.bones[b].parent);
+        }
+        json clips = json::array();
+        for (const rig::AnimationClip& c : character_.clips) clips.push_back({{"name", c.name}, {"duration", c.duration}});
+        desc["character"] = {{"meshes", meshes},
+                             {"parents", parents},
+                             {"inverseBind", tagged("$f32", inv.data(), inv.size() * sizeof(float))},
+                             {"clips", clips},
+                             {"notes", importNotes_},
+                             {"showSkeleton", params_["showSkeleton"].get<bool>()},
+                             {"source", character_.sourcePath}};
+    }
+    return desc;
 }
 
 json Session::takeAddedBodies() {
@@ -392,6 +481,15 @@ json Session::frame(bool includeParticles) {
                   {"fixedDt", world_->fixedDt()},
                   {"broken", brokenSinceFrame_}};
     if (const char* state = characterState()) stats["character"] = state;
+    if (hasCharacter_) {
+        std::vector<float> pose;
+        for (const Transform& m : characterPose_) {
+            const Transform t = characterActor_.root * m;
+            pose.insert(pose.end(), {t.position.x, t.position.y, t.position.z, t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w});
+        }
+        f["pose"] = tagged("$f32", pose.data(), pose.size() * sizeof(float));
+        if (!character_.clips.empty()) stats["clip"] = character_.clips[clipIndex_].name;
+    }
     if (spring_) stats["springRecoveries"] = spring_->recoveries();
 
     if (particles_) {

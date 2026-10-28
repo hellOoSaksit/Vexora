@@ -1,7 +1,7 @@
 // Electron main process: owns the window and the background simulation process.
 // The simulation (vexora_sim) runs as a separate native process so heavy computation never
 // freezes the UI, and a crash there does not take the window down.
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -35,6 +35,28 @@ function decodeFloats(b64) {
   return out;
 }
 
+// Binary payloads tagged {"$f32"|"$u16"|"$u32": base64} anywhere in a message -> typed arrays.
+const TAGS = { $f32: Float32Array, $u16: Uint16Array, $u32: Uint32Array };
+function decodeTagged(value) {
+  if (Array.isArray(value)) return value.map(decodeTagged);
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value);
+    if (keys.length === 1 && TAGS[keys[0]]) {
+      const buf = Buffer.from(value[keys[0]], 'base64');
+      const Type = TAGS[keys[0]];
+      const out = new Type(buf.length / Type.BYTES_PER_ELEMENT);
+      new Uint8Array(out.buffer).set(buf);
+      return out;
+    }
+    for (const k of keys) value[k] = decodeTagged(value[k]);
+  }
+  return value;
+}
+
+function samplesDir() {
+  return app.isPackaged ? path.join(process.resourcesPath, 'samples') : path.join(__dirname, '..', 'assets', 'samples');
+}
+
 function toRenderer(msg) {
   if (win && !win.isDestroyed()) win.webContents.send('sim:message', msg);
 }
@@ -45,7 +67,7 @@ function startSim() {
     toRenderer({ type: 'fatal', message: `ไม่พบโปรแกรมคำนวณ (${SIM_EXE}) — ต้อง build ก่อน ดู README` });
     return;
   }
-  sim = spawn(exe, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  sim = spawn(exe, ['--samples', samplesDir()], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   const lines = readline.createInterface({ input: sim.stdout });
   lines.on('line', (line) => {
     let msg;
@@ -59,6 +81,7 @@ function startSim() {
       if (msg.sleep) msg.sleep = new Uint8Array(Buffer.from(msg.sleep, 'base64'));
       if (msg.particles) msg.particles = decodeFloats(msg.particles);
     }
+    if (msg.type === 'loaded' || msg.type === 'frame') decodeTagged(msg);
     if (msg.type === 'hello') restarts = 0;
     toRenderer(msg);
   });
@@ -74,6 +97,14 @@ function startSim() {
 
 ipcMain.on('sim:send', (_event, cmd) => {
   if (sim && sim.stdin.writable) sim.stdin.write(JSON.stringify(cmd) + '\n');
+});
+
+ipcMain.handle('dialog:openFile', async (_event, filters) => {
+  const result = await dialog.showOpenDialog(win, {
+    properties: ['openFile'],
+    filters: [{ name: filters.map((f) => f.label).join(', '), extensions: filters.map((f) => f.value.replace(/^\./, '')) }],
+  });
+  return result.canceled ? null : result.filePaths[0];
 });
 
 function createWindow() {

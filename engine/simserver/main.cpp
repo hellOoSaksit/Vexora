@@ -94,7 +94,9 @@ private:
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    for (int i = 1; i + 1 < argc; ++i)
+        if (std::string(argv[i]) == "--samples") setSamplesDir(argv[i + 1]);
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);  // No CRLF translation inside the protocol.
     _setmode(_fileno(stdin), _O_BINARY);
