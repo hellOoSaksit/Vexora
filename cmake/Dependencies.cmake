@@ -38,7 +38,7 @@ if(VEXORA_BUILD_TESTS)
   FetchContent_Declare(
     doctest
     GIT_REPOSITORY https://github.com/doctest/doctest.git
-    GIT_TAG        v2.4.11
+    GIT_TAG        v2.4.12  # 2.4.11 declares cmake_minimum_required(3.0), rejected by CMake >= 4
     GIT_SHALLOW    TRUE
   )
   FetchContent_MakeAvailable(doctest)
