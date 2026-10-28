@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
+  <title>Vexora</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Vexora <span class="tag">Physics</span></div>
+    <nav id="scene-tabs" class="tabs" aria-label="เลือกฉาก"></nav>
+    <div class="transport">
+      <button id="btn-play" class="primary" disabled title="เล่น / หยุด (Space)">▶ เล่น</button>
+      <button id="btn-step" disabled title="เดินหน้า 1 ขั้น">⏭ ทีละขั้น</button>
+      <button id="btn-reset" disabled title="เริ่มใหม่ (R)">↺ เริ่มใหม่</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel left">
+      <section>
+        <h2 id="scene-title">กำลังเริ่มโปรแกรมคำนวณ…</h2>
+        <p id="scene-desc" class="muted"></p>
+        <div id="scene-actions" class="actions"></div>
+      </section>
+      <section>
+        <div class="section-head">
+          <h3>ตั้งค่าฉาก</h3>
+          <button id="btn-defaults" class="link" title="คืนค่าเริ่มต้นของฉากนี้">คืนค่าเริ่มต้น</button>
+        </div>
+        <form id="scene-form" class="form" autocomplete="off"></form>
+      </section>
+      <section>
+        <h3>การจำลอง</h3>
+        <form id="global-form" class="form" autocomplete="off"></form>
+      </section>
+      <label class="toggle">
+        <input type="checkbox" id="show-advanced" /> แสดงตั้งค่าขั้นสูง
+      </label>
+    </aside>
+
+    <section class="viewport-wrap">
+      <canvas id="viewport"></canvas>
+      <div id="overlay" class="overlay"></div>
+      <div class="hint">ลากเมาส์ซ้าย = หมุนมุมมอง · ลากขวา = เลื่อน · ล้อเมาส์ = ซูม</div>
+      <div id="toast" class="toast" role="alert" hidden></div>
+    </section>
+
+    <aside class="panel right">
+      <section>
+        <h3>สถานะ</h3>
+        <dl id="stats" class="stats"></dl>
+        <div id="speed-warning" class="notice warn" hidden></div>
+      </section>
+      <section>
+        <h3>การประมวลผล (CPU / GPU)</h3>
+        <div id="devices"></div>
+      </section>
+      <section>
+        <h3>คำเตือน</h3>
+        <div id="warnings" class="warnings"><p class="muted">ไม่มีคำเตือน</p></div>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

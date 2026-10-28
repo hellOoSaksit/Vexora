@@ -1,0 +1,196 @@
+// 3D viewport (three.js). Draws what the simulation reports; it never simulates anything.
+import * as THREE from '../node_modules/three/build/three.module.js';
+
+const SLEEP_TINT = 0.55;
+
+export class Viewport {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x0f1115);
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.05, 500);
+
+    this.scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2420, 1.1));
+    this.sun = new THREE.DirectionalLight(0xffffff, 2.2);
+    this.sun.position.set(8, 16, 6);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    const s = this.sun.shadow.camera;
+    s.left = s.bottom = -20;
+    s.right = s.top = 20;
+    s.far = 60;
+    this.scene.add(this.sun);
+    const grid = new THREE.GridHelper(40, 40, 0x3c4450, 0x2a3038);
+    grid.position.y = 0.002;
+    this.scene.add(grid);
+
+    this.root = new THREE.Group();
+    this.scene.add(this.root);
+    this.dynamic = [];          // Index = render index sent by the simulation.
+    this.geometries = new Map();
+    this.materials = new Map();
+    this.points = null;
+
+    this.orbit = { target: new THREE.Vector3(0, 2, 0), radius: 16, yaw: 0.7, pitch: 0.42 };
+    this.installControls();
+    new ResizeObserver(() => this.resize()).observe(canvas.parentElement);
+    this.resize();
+    const loop = () => {
+      this.render();
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+
+  installControls() {
+    let dragging = null;
+    let last = { x: 0, y: 0 };
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.canvas.addEventListener('pointerdown', (e) => {
+      dragging = e.button === 2 || e.shiftKey ? 'pan' : 'orbit';
+      last = { x: e.clientX, y: e.clientY };
+      this.canvas.setPointerCapture(e.pointerId);
+    });
+    this.canvas.addEventListener('pointerup', () => (dragging = null));
+    this.canvas.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - last.x, dy = e.clientY - last.y;
+      last = { x: e.clientX, y: e.clientY };
+      if (dragging === 'orbit') {
+        this.orbit.yaw -= dx * 0.006;
+        this.orbit.pitch = Math.min(1.5, Math.max(-0.2, this.orbit.pitch + dy * 0.006));
+      } else {
+        const scale = this.orbit.radius * 0.0015;
+        const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 0);
+        const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 1);
+        this.orbit.target.addScaledVector(right, -dx * scale).addScaledVector(up, dy * scale);
+      }
+    });
+    this.canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      this.orbit.radius = Math.min(200, Math.max(1, this.orbit.radius * Math.exp(e.deltaY * 0.001)));
+    }, { passive: false });
+  }
+
+  resize() {
+    const { clientWidth: w, clientHeight: h } = this.canvas.parentElement;
+    if (!w || !h) return;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  }
+
+  geometryFor(shape, size) {
+    const key = `${shape}:${size.join(',')}`;
+    if (!this.geometries.has(key)) {
+      let g;
+      if (shape === 'box') g = new THREE.BoxGeometry(size[0] * 2, size[1] * 2, size[2] * 2);
+      else if (shape === 'sphere') g = new THREE.SphereGeometry(size[0], 24, 16);
+      else g = new THREE.CapsuleGeometry(size[0], size[1] * 2, 6, 16);
+      this.geometries.set(key, g);
+    }
+    return this.geometries.get(key);
+  }
+
+  materialFor(color, sleeping) {
+    const key = `${color}:${sleeping}`;
+    if (!this.materials.has(key)) {
+      const c = new THREE.Color(color);
+      if (sleeping) c.multiplyScalar(SLEEP_TINT);
+      this.materials.set(key, new THREE.MeshStandardMaterial({ color: c, roughness: 0.7, metalness: 0.1 }));
+    }
+    return this.materials.get(key);
+  }
+
+  clear() {
+    this.root.clear();
+    this.dynamic = [];
+    if (this.points) {
+      this.points.geometry.dispose();
+      this.scene.remove(this.points);
+      this.points = null;
+    }
+  }
+
+  // Scene description from {"type":"loaded"}.
+  load(desc) {
+    this.clear();
+    this.addBodies(desc.bodies);
+    const castShadows = this.dynamic.length <= 600;  // Shadows get expensive with many bodies.
+    this.sun.castShadow = castShadows;
+    if (desc.particles) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+      const material = new THREE.PointsMaterial({ color: 0x7cc4ff, size: Math.max(0.03, desc.particleRadius * 2.5), sizeAttenuation: true });
+      this.points = new THREE.Points(geometry, material);
+      this.points.frustumCulled = false;
+      this.scene.add(this.points);
+    }
+    this.frameCamera(desc.scene);
+  }
+
+  addBodies(bodies) {
+    for (const b of bodies) {
+      const mesh = new THREE.Mesh(this.geometryFor(b.shape, b.size), this.materialFor(b.color, false));
+      mesh.position.fromArray(b.position);
+      mesh.quaternion.fromArray(b.rotation);
+      mesh.castShadow = b.dynamic;
+      mesh.receiveShadow = true;
+      mesh.userData.color = b.color;
+      this.root.add(mesh);
+      if (b.dynamic) this.dynamic[b.index] = mesh;
+    }
+  }
+
+  // Fit the camera to where the scene's objects are (the floor is ignored).
+  frameCamera(sceneId) {
+    if (sceneId === 'fountain') {
+      this.orbit.target.set(0, 2.5, 0);
+      this.orbit.radius = 15;
+      this.orbit.pitch = 0.3;
+      return;
+    }
+    const box = new THREE.Box3();
+    for (const mesh of this.dynamic) if (mesh) box.expandByPoint(mesh.position);
+    if (box.isEmpty()) box.set(new THREE.Vector3(-2, 0, -2), new THREE.Vector3(2, 4, 2));
+    if (sceneId === 'chain') box.min.x -= box.max.x - box.min.x;  // It swings down to both sides of the pivot.
+    box.min.y = 0;  // Objects fall towards the floor; keep it in view.
+    const size = box.getSize(new THREE.Vector3());
+    box.getCenter(this.orbit.target);
+    this.orbit.radius = Math.max(8, Math.max(size.x, size.y, size.z) * 1.9);
+    this.orbit.pitch = sceneId === 'drop' ? 0.45 : 0.25;
+  }
+
+  // Frame from the simulation: Float32 transforms (7 per dynamic body), sleep flags, particles.
+  applyFrame(frame) {
+    const xf = frame.bodies;
+    if (xf) {
+      for (let i = 0; i < this.dynamic.length; i++) {
+        const mesh = this.dynamic[i];
+        if (!mesh || (i + 1) * 7 > xf.length) continue;
+        mesh.position.set(xf[i * 7], xf[i * 7 + 1], xf[i * 7 + 2]);
+        mesh.quaternion.set(xf[i * 7 + 3], xf[i * 7 + 4], xf[i * 7 + 5], xf[i * 7 + 6]);
+        if (frame.sleep) mesh.material = this.materialFor(mesh.userData.color, frame.sleep[i] === 1);
+      }
+    }
+    if (this.points && frame.particles) {
+      const geometry = this.points.geometry;
+      geometry.setAttribute('position', new THREE.BufferAttribute(frame.particles, 3));
+      geometry.computeBoundingSphere();
+    }
+  }
+
+  render() {
+    const o = this.orbit;
+    this.camera.position.set(
+      o.target.x + o.radius * Math.cos(o.pitch) * Math.sin(o.yaw),
+      o.target.y + o.radius * Math.sin(o.pitch),
+      o.target.z + o.radius * Math.cos(o.pitch) * Math.cos(o.yaw));
+    this.camera.lookAt(o.target);
+    this.renderer.render(this.scene, this.camera);
+  }
+}

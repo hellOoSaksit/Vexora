@@ -10,6 +10,29 @@ Only the **Physics & Simulation core (Phase A)** exists so far: `engine/physics`
 See [docs/physics](docs/physics/README.md) for the engine evaluation, architecture, test plan with measured results,
 and roadmap.
 
+## วิธีใช้งานแบบง่าย (Windows)
+
+**ไม่อยาก build เอง:** เปิดแท็บ **Actions** ของรีโปบน GitHub → เลือกงาน `windows-app` ล่าสุดที่ขึ้นเครื่องหมายถูก →
+ดาวน์โหลด **Vexora-Windows** ในส่วน Artifacts → แตกไฟล์ zip แล้วเลือก
+`Vexora-Portable-*.exe` (เปิดได้ทันที) หรือ `Vexora-Setup-*.exe` (ติดตั้งลงเครื่อง)
+
+**Build เอง:** ติดตั้ง CMake, Visual Studio 2022 (C++) และ Node.js LTS แล้วดับเบิลคลิก
+
+- `build-windows.bat` → สร้างไฟล์ `.exe` ไว้ที่ `app\dist\`
+- `start-windows.bat` → เปิดโปรแกรมทันทีโดยไม่ต้องติดตั้ง
+
+ไฟล์ .exe ยังไม่ได้ลงลายเซ็นดิจิทัล (code signing) Windows อาจขึ้นหน้าจอ "Windows protected your PC"
+ให้กด **More info → Run anyway**
+
+## App structure
+
+```
+app/                     Electron UI (plain HTML/JS + three.js, no bundler)
+  main.js                window + starts the background simulation process (vexora_sim)
+  renderer/              settings forms are generated from the schema vexora_sim sends
+engine/simserver/        vexora_sim: JSON-lines protocol on stdin/stdout, scenes, settings schema
+```
+
 ## Build and test
 
 Requirements: CMake ≥ 3.24, a C++17 compiler, network access on first configure (fetches pinned Jolt, doctest,
@@ -41,3 +64,5 @@ docs/physics/                            design and evaluation documents
 - doctest (tests only) — MIT
 - volk — MIT
 - Vulkan-Headers — Apache-2.0 / MIT
+- nlohmann/json — MIT
+- Electron, three.js — MIT

@@ -22,10 +22,11 @@ set(JPH_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
 set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
 # Jolt otherwise overrides CMAKE_CXX_FLAGS_* for the whole project.
 set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
-# Jolt defaults to the static MSVC runtime (/MT); the rest of Vexora uses CMake's default
-# dynamic runtime (/MD). Mixing them fails to link (LNK2038), so Jolt follows the project.
-set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
+# Every target uses the static MSVC runtime (/MT, set in the top-level CMakeLists.txt) so the
+# shipped vexora_sim.exe needs no Visual C++ Redistributable. Jolt must match (LNK2038 otherwise).
+set(USE_STATIC_MSVC_RUNTIME_LIBRARY ON CACHE BOOL "" FORCE)
 set(USE_ASSERTS OFF CACHE BOOL "")
+set(GENERATE_DEBUG_SYMBOLS OFF CACHE BOOL "" FORCE)  # Smaller shipped binaries.
 set(CROSS_PLATFORM_DETERMINISTIC ${VEXORA_PHYSICS_CROSS_PLATFORM_DETERMINISM} CACHE BOOL "" FORCE)
 # Portable baseline; AVX/AVX2 builds can be enabled per target platform later.
 set(USE_AVX OFF CACHE BOOL "" FORCE)
@@ -36,6 +37,15 @@ set(USE_TZCNT OFF CACHE BOOL "" FORCE)
 set(USE_F16C OFF CACHE BOOL "" FORCE)
 set(USE_FMADD OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(JoltPhysics)
+
+# JSON for the simulation server protocol (MIT).
+FetchContent_Declare(
+  nlohmann_json
+  URL      https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+  URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
 
 if(VEXORA_BUILD_TESTS)
   FetchContent_Declare(

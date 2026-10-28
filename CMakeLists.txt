@@ -16,6 +16,9 @@ option(VEXORA_BUILD_BENCH "Build physics stress benchmark" ON)
 option(VEXORA_PHYSICS_GPU "Build the Vulkan GPU compute backend (particles)" ON)
 option(VEXORA_PHYSICS_CROSS_PLATFORM_DETERMINISM "Build Jolt with CROSS_PLATFORM_DETERMINISTIC" OFF)
 
+# Static MSVC runtime everywhere: the app ships without needing the VC++ Redistributable.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 if(VEXORA_BUILD_TESTS)
   enable_testing()
 endif()
@@ -23,3 +26,4 @@ endif()
 include(cmake/Dependencies.cmake)
 
 add_subdirectory(engine/physics)
+add_subdirectory(engine/simserver)

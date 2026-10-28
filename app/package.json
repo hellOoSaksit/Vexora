@@ -1,0 +1,84 @@
+{
+  "name": "vexora",
+  "productName": "Vexora",
+  "version": "0.1.0",
+  "description": "Vexora — physics & simulation for 3D characters, VFX and game assets",
+  "main": "main.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "node scripts/copy-sim.js && electron .",
+    "copy-sim": "node scripts/copy-sim.js",
+    "test": "node scripts/copy-sim.js && node --test \"test/*.test.mjs\"",
+    "dist": "node scripts/copy-sim.js && electron-builder --publish never",
+    "dist:win": "node scripts/copy-sim.js && electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "electron": "44.10.0",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "com.vexora.app",
+    "productName": "Vexora",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "artifactName": "Vexora-Setup-${version}.exe",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "portable": {
+      "artifactName": "Vexora-Portable-${version}.exe"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Graphics"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "publish": null
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hellOoSaksit/Vexora.git"
+  }
+}

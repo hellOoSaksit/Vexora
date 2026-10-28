@@ -1,0 +1,35 @@
+name: windows-app
+
+# Builds the Windows installer and portable .exe and uploads them as a downloadable artifact.
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Build simulation engine
+        run: |
+          cmake -S . -B build -DVEXORA_BUILD_TESTS=OFF -DVEXORA_BUILD_BENCH=OFF
+          cmake --build build --config Release --target vexora_sim -j 4
+      - name: Install app dependencies
+        working-directory: app
+        run: npm ci
+      - name: Protocol tests (drive vexora_sim.exe)
+        working-directory: app
+        run: npm test
+      - name: Package installer and portable exe
+        working-directory: app
+        run: npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Vexora-Windows
+          path: app/dist/*.exe
+          if-no-files-found: error
