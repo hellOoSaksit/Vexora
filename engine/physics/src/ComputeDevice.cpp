@@ -1,5 +1,6 @@
 #include "vexora/physics/ComputeDevice.h"
 
+#include <algorithm>
 #include <thread>
 
 #include "ParticleBackend.h"

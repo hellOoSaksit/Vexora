@@ -43,6 +43,10 @@ if(VEXORA_GLSLANG)
   endif()
 endif()
 
+if(WIN32)
+  # Keep <windows.h> (pulled in by system headers) from defining min/max macros.
+  target_compile_definitions(vexora_physics PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
 if(MSVC)
   target_compile_options(vexora_physics PRIVATE /W4)
 else()

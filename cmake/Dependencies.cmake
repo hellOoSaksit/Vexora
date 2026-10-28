@@ -22,6 +22,9 @@ set(JPH_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
 set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
 # Jolt otherwise overrides CMAKE_CXX_FLAGS_* for the whole project.
 set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
+# Jolt defaults to the static MSVC runtime (/MT); the rest of Vexora uses CMake's default
+# dynamic runtime (/MD). Mixing them fails to link (LNK2038), so Jolt follows the project.
+set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
 set(USE_ASSERTS OFF CACHE BOOL "")
 set(CROSS_PLATFORM_DETERMINISTIC ${VEXORA_PHYSICS_CROSS_PLATFORM_DETERMINISM} CACHE BOOL "" FORCE)
 # Portable baseline; AVX/AVX2 builds can be enabled per target platform later.
