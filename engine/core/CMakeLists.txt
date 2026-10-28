@@ -1,0 +1,8 @@
+add_library(vexora_core src/Types.cpp)
+add_library(vexora::core ALIAS vexora_core)
+target_include_directories(vexora_core PUBLIC include)
+if(MSVC)
+  target_compile_options(vexora_core PRIVATE /W4)
+else()
+  target_compile_options(vexora_core PRIVATE -Wall -Wextra)
+endif()

@@ -1,8 +1,8 @@
-#include "vexora/physics/Types.h"
+#include "vexora/core/Types.h"
 
 #include <algorithm>
 
-namespace vexora::physics {
+namespace vexora::core {
 
 Quat Quat::fromAxisAngle(const Vec3& axis, float radians) {
     const float len = axis.length();
@@ -26,7 +26,7 @@ Quat Quat::fromTo(const Vec3& from, const Vec3& to) {
         // Opposite directions: rotate 180 degrees about any axis perpendicular to `from`.
         Vec3 axis = cross({1, 0, 0}, from);
         if (axis.length() < 1e-4f) axis = cross({0, 1, 0}, from);
-        return fromAxisAngle(physics::normalized(axis), 3.14159265f);
+        return fromAxisAngle(core::normalized(axis), 3.14159265f);
     }
     const Vec3 c = cross(from, to);
     return Quat{c.x, c.y, c.z, 1.0f + d}.normalized();
@@ -70,4 +70,4 @@ Transform interpolate(const Transform& a, const Transform& b, float alpha) {
     return out;
 }
 
-}  // namespace vexora::physics
+}  // namespace vexora::core

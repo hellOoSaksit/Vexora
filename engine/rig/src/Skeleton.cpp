@@ -1,8 +1,10 @@
-#include "vexora/physics/Skeleton.h"
+#include "vexora/rig/Skeleton.h"
 
 #include <algorithm>
 
-namespace vexora::physics {
+namespace vexora::rig {
+
+using core::ErrorCode;
 
 int Skeleton::find(const std::string& name) const {
     for (size_t i = 0; i < bones.size(); ++i)
@@ -15,7 +17,6 @@ Status Skeleton::validate() const {
     for (size_t i = 0; i < bones.size(); ++i) {
         const Bone& b = bones[i];
         if (b.parent >= int(i)) return {ErrorCode::InvalidArgument, "Bone '" + b.name + "' must come after its parent"};
-        if (i > 0 && b.parent < 0) return {ErrorCode::InvalidArgument, "Only the first bone may be a root"};
         if (!b.restLocal.position.isFinite() || !b.restLocal.rotation.isFinite())
             return {ErrorCode::InvalidArgument, "Bone '" + b.name + "' has a non-finite rest transform"};
     }
@@ -59,4 +60,4 @@ LocalPose blendPoses(const Skeleton& skeleton, const LocalPose& a, const LocalPo
     return out;
 }
 
-}  // namespace vexora::physics
+}  // namespace vexora::rig

@@ -25,5 +25,7 @@ endif()
 
 include(cmake/Dependencies.cmake)
 
+add_subdirectory(engine/core)
+add_subdirectory(engine/rig)
 add_subdirectory(engine/physics)
 add_subdirectory(engine/simserver)

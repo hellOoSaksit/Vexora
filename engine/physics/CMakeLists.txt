@@ -1,5 +1,4 @@
 add_library(vexora_physics
-  src/Types.cpp
   src/Shapes.cpp
   src/PhysicsMaterial.cpp
   src/QualityProfile.cpp
@@ -8,12 +7,12 @@ add_library(vexora_physics
   src/ComputeDevice.cpp
   src/CpuParticleBackend.cpp
   src/ParticleSystem.cpp
-  src/Skeleton.cpp
   src/SecondaryMotion.cpp
   src/Ragdoll.cpp
 )
 add_library(vexora::physics ALIAS vexora_physics)
 target_include_directories(vexora_physics PUBLIC include)
+target_link_libraries(vexora_physics PUBLIC vexora::core vexora::rig)
 # Jolt is a PRIVATE dependency: no Jolt type is visible through the public headers.
 target_link_libraries(vexora_physics PRIVATE Jolt)
 if(VEXORA_PHYSICS_GPU)

@@ -1,0 +1,10 @@
+# Rig data shared by animation, physics and export: skeleton, poses, skinning, clips.
+add_library(vexora_rig src/Skeleton.cpp src/Animation.cpp src/Skinning.cpp)
+add_library(vexora::rig ALIAS vexora_rig)
+target_include_directories(vexora_rig PUBLIC include)
+target_link_libraries(vexora_rig PUBLIC vexora::core)
+if(MSVC)
+  target_compile_options(vexora_rig PRIVATE /W4)
+else()
+  target_compile_options(vexora_rig PRIVATE -Wall -Wextra)
+endif()
